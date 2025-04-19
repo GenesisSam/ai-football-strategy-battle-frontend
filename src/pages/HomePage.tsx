@@ -1,5 +1,6 @@
-import React from 'react';
-import styled from 'styled-components';
+import React, { useState } from "react";
+import styled from "styled-components";
+import SplashScreen from "../components/SplashScreen";
 
 const HomeContainer = styled.div`
   display: flex;
@@ -20,14 +21,25 @@ const Description = styled.p`
 `;
 
 const HomePage: React.FC = () => {
+  const [showSplash, setShowSplash] = useState(true);
+
+  const handleSplashFinish = () => {
+    setShowSplash(false);
+  };
+
   return (
-    <HomeContainer>
-      <Title>AI 축구 전략 배틀</Title>
-      <Description>
-        인공지능 기반 축구 전략 시뮬레이션에 오신 것을 환영합니다. 
-        자신만의 전략을 만들고 다른 플레이어와 경쟁해보세요!
-      </Description>
-    </HomeContainer>
+    <>
+      {showSplash && (
+        <SplashScreen duration={1500} onFinish={handleSplashFinish} />
+      )}
+      <HomeContainer>
+        <Title>AI 축구 전략 배틀</Title>
+        <Description>
+          인공지능 기반 축구 전략 시뮬레이션에 오신 것을 환영합니다. 자신만의
+          전략을 만들고 다른 플레이어와 경쟁해보세요!
+        </Description>
+      </HomeContainer>
+    </>
   );
 };
 

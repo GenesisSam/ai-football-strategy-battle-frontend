@@ -1,75 +1,43 @@
-# React + TypeScript + Vite
+# `AI Football Strategy Batttle`
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[간략설명]
 
-## Package Manager
+유저간 배틀 장르, 나만의 축구 스쿼드를 구성하고 팀 운영 전략을 300자 이내 text로  작성한다.
+이렇게 작성된 전략을 AI를 통해서 다른 사람의 전략과 비교 분석하여 배틀을 시키고 승패를 정한다.
 
-This project uses Yarn as the main package manager. Here are some common commands:
+[전략준비]
 
-```bash
-# Install dependencies
-yarn
+1. 스쿼드 전략(4-3-3-1)을 선택하고, 각 포지션에 원하는 선수를 지정한다.
+    1. 스쿼드 전략과 포지션에 배치된 선수들 정보 또한 AI에게 전달될 전략 정보임.
+2. 본인의 전략을 최대 300자까지 작성할 수 있다.
 
-# Add a new dependency
-yarn add [package-name]
+[배틀모드]
 
-# Add a dev dependency
-yarn add -D [package-name]
+1. 빠른대전
+    1. 각자의 전략을 이용해 승/무/패 의 결과만을 도출한다.
+    2. 이때 발생한 결과를 이용해서 자체적인 mmr 시스템에 이용한다.
+2. 게임 대전
+    1. 약 5분정도 진행된다.
+    2. 진행중에는 시뮬레이션 되고 있는 정보가 표시된다.
+        1. 골을 넣었는지, 패널티카드를 받은 선수는 있는지, 부상은 있는지, 퇴장은 존재하는지, 코너킥이 있었는지, 등등
+    3. 경기가 완료되고 나면 승/무/패 여부와 함께 볼점유율/슈팅수/유효패스수 등 경기관련 정보들을 표시한다.
+    4. 경기 결과를 이용해서 mmr 시스템에 이용한다.
 
-# Run development server
-yarn dev
+[배틀 종료후]
 
-# Build for production
-yarn build
-```
+- 모든 경기 결과는 이미지로 저장할 수 있다.
 
-Currently, two official plugins are available:
+[향후 방향성]
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 게임 대전에서 발생하는 로그를 Match에서도 중계할 수 있게 한다.
+- 각 선수별 Stat, Overall 부여 및 시뮬레이션에 영향 반영
+- 선수 카드 육성
+    - 박주영 키우기 같은 내 최애 선수 키우기
+- 유저 프로필을 기반으로 한 내가 선수가 되는 시스템
+- 하트/트로피를 이용한
+    - 재경기 신청
+    - 전적 초기화
+    - 선수카드 교환
+    - 등등
+-
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
