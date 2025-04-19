@@ -40,7 +40,7 @@ export interface Squad {
 
 // 스쿼드 목록용 간략한 인터페이스
 export interface SquadSummary {
-  id: string;
+  _id: string;
   name: string;
   formation: string;
   isActive: boolean;

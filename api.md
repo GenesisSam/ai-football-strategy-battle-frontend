@@ -7,9 +7,10 @@
 
 1. [기본 API](#1-기본-api)
 2. [인증 API](#2-인증-api)
-3. [스쿼드 API](#3-스쿼드-api)
-4. [매치 API](#4-매치-api)
-5. [웹소켓 API](#5-웹소켓-api)
+3. [EPL 선수 API](#3-epl-선수-api)
+4. [스쿼드 API](#4-스쿼드-api)
+5. [매치 API](#5-매치-api)
+6. [웹소켓 API](#6-웹소켓-api)
 
 ## 1. 기본 API
 
@@ -96,7 +97,346 @@
     ```
   - **401 Unauthorized**: 인증되지 않은 접근
 
-## 3. 스쿼드 API
+## 3. EPL 선수 API
+
+### 모든 EPL 선수 목록 조회
+- **URL**: `/api/epl-players`
+- **Method**: `GET`
+- **Description**: 모든 EPL 선수의 목록을 조회합니다.
+- **Auth Required**: No
+- **Response**:
+  - **200 OK**
+    ```json
+    [
+      {
+        "id": "player123",
+        "name": "Harry Kane",
+        "position": "Forward",
+        "team": "Tottenham Hotspur",
+        "nationality": "England",
+        "age": 27,
+        "attributes": {
+          "pace": 85,
+          "shooting": 90,
+          "passing": 80,
+          "dribbling": 85,
+          "defending": 40,
+          "physical": 75
+        }
+      },
+      {
+        "id": "player456",
+        "name": "Kevin De Bruyne",
+        "position": "Midfielder",
+        "team": "Manchester City",
+        "nationality": "Belgium",
+        "age": 29,
+        "attributes": {
+          "pace": 75,
+          "shooting": 85,
+          "passing": 95,
+          "dribbling": 88,
+          "defending": 60,
+          "physical": 78
+        }
+      }
+    ]
+    ```
+
+### EPL 선수 검색
+- **URL**: `/api/epl-players/search`
+- **Method**: `GET`
+- **Description**: 이름, 팀, 포지션, 국적 등으로 EPL 선수를 검색합니다.
+- **Auth Required**: No
+- **Query Parameters**:
+  - `query`: 검색어 (이름, 팀, 포지션, 국적 등)
+- **Response**:
+  - **200 OK**
+    ```json
+    [
+      {
+        "id": "player123",
+        "name": "Harry Kane",
+        "position": "Forward",
+        "team": "Tottenham Hotspur",
+        "nationality": "England",
+        "attributes": { ... }
+      }
+    ]
+    ```
+
+### 팀별 EPL 선수 목록 조회
+- **URL**: `/api/epl-players/team`
+- **Method**: `GET`
+- **Description**: 특정 팀의 모든 EPL 선수를 조회합니다.
+- **Auth Required**: No
+- **Query Parameters**:
+  - `team`: 팀 이름 (예: "Manchester United")
+- **Response**:
+  - **200 OK**
+    ```json
+    [
+      {
+        "id": "player789",
+        "name": "Bruno Fernandes",
+        "position": "Midfielder",
+        "team": "Manchester United",
+        "nationality": "Portugal",
+        "attributes": { ... }
+      },
+      {
+        "id": "player101",
+        "name": "Marcus Rashford",
+        "position": "Forward",
+        "team": "Manchester United",
+        "nationality": "England",
+        "attributes": { ... }
+      }
+    ]
+    ```
+
+### ID로 EPL 선수 조회
+- **URL**: `/api/epl-players/:id`
+- **Method**: `GET`
+- **Description**: ID를 사용하여 특정 EPL 선수의 정보를 조회합니다.
+- **Auth Required**: No
+- **Parameters**:
+  - `id`: 조회할 선수 ID
+- **Response**:
+  - **200 OK**
+    ```json
+    {
+      "id": "player123",
+      "name": "Harry Kane",
+      "position": "Forward",
+      "team": "Tottenham Hotspur",
+      "nationality": "England",
+      "age": 27,
+      "height": "188cm",
+      "weight": "86kg",
+      "attributes": {
+        "pace": 85,
+        "shooting": 90,
+        "passing": 80,
+        "dribbling": 85,
+        "defending": 40,
+        "physical": 75
+      },
+      "statistics": {
+        "matchesPlayed": 38,
+        "goals": 23,
+        "assists": 14,
+        "yellowCards": 2,
+        "redCards": 0
+      }
+    }
+    ```
+  - **404 Not Found**: 선수를 찾을 수 없음
+
+### EPL 선수 등록 (관리자용)
+- **URL**: `/api/epl-players`
+- **Method**: `POST`
+- **Description**: 새로운 EPL 선수를 등록합니다.
+- **Auth Required**: Yes (JWT)
+- **Request Body**:
+  ```json
+  {
+    "name": "New Player",
+    "position": "Midfielder",
+    "team": "Chelsea",
+    "nationality": "France",
+    "age": 25,
+    "height": "180cm",
+    "weight": "75kg",
+    "attributes": {
+      "pace": 82,
+      "shooting": 78,
+      "passing": 85,
+      "dribbling": 88,
+      "defending": 70,
+      "physical": 72
+    }
+  }
+  ```
+- **Response**:
+  - **201 Created**
+    ```json
+    {
+      "id": "player999",
+      "name": "New Player",
+      "position": "Midfielder",
+      "team": "Chelsea",
+      "nationality": "France",
+      "age": 25,
+      "height": "180cm",
+      "weight": "75kg",
+      "attributes": {
+        "pace": 82,
+        "shooting": 78,
+        "passing": 85,
+        "dribbling": 88,
+        "defending": 70,
+        "physical": 72
+      }
+    }
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+  - **400 Bad Request**: 잘못된 입력 데이터
+
+### EPL 선수 일괄 등록 (관리자용)
+- **URL**: `/api/epl-players/bulk`
+- **Method**: `POST`
+- **Description**: 여러 EPL 선수를 한 번에 등록합니다.
+- **Auth Required**: Yes (JWT)
+- **Request Body**:
+  ```json
+  [
+    {
+      "name": "Player 1",
+      "position": "Goalkeeper",
+      "team": "Arsenal",
+      "attributes": { ... }
+    },
+    {
+      "name": "Player 2",
+      "position": "Defender",
+      "team": "Liverpool",
+      "attributes": { ... }
+    }
+  ]
+  ```
+- **Response**:
+  - **201 Created**
+    ```json
+    [
+      {
+        "id": "player1001",
+        "name": "Player 1",
+        "position": "Goalkeeper",
+        "team": "Arsenal",
+        "attributes": { ... }
+      },
+      {
+        "id": "player1002",
+        "name": "Player 2",
+        "position": "Defender",
+        "team": "Liverpool",
+        "attributes": { ... }
+      }
+    ]
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+  - **400 Bad Request**: 잘못된 입력 데이터
+
+### EPL 선수 정보 수정 (관리자용)
+- **URL**: `/api/epl-players/:id`
+- **Method**: `PUT`
+- **Description**: 특정 EPL 선수의 정보를 수정합니다.
+- **Auth Required**: Yes (JWT)
+- **Parameters**:
+  - `id`: 수정할 선수 ID
+- **Request Body**:
+  ```json
+  {
+    "team": "Manchester United",
+    "attributes": {
+      "pace": 84,
+      "shooting": 88
+    }
+  }
+  ```
+- **Response**:
+  - **200 OK**
+    ```json
+    {
+      "id": "player123",
+      "name": "Harry Kane",
+      "position": "Forward",
+      "team": "Manchester United",
+      "attributes": {
+        "pace": 84,
+        "shooting": 88,
+        "passing": 80,
+        "dribbling": 85,
+        "defending": 40,
+        "physical": 75
+      }
+    }
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+  - **404 Not Found**: 선수를 찾을 수 없음
+  - **400 Bad Request**: 잘못된 입력 데이터
+
+### EPL 선수 삭제 (관리자용)
+- **URL**: `/api/epl-players/:id`
+- **Method**: `DELETE`
+- **Description**: 특정 EPL 선수를 삭제합니다.
+- **Auth Required**: Yes (JWT)
+- **Parameters**:
+  - `id`: 삭제할 선수 ID
+- **Response**:
+  - **200 OK**
+    ```json
+    {
+      "id": "player123",
+      "name": "Harry Kane",
+      "message": "선수가 성공적으로 삭제되었습니다."
+    }
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+  - **404 Not Found**: 선수를 찾을 수 없음
+
+### EPL 선수 데이터 스크랩 (관리자용)
+- **URL**: `/api/epl-players/scrape`
+- **Method**: `POST`
+- **Description**: EPL 선수 데이터를 웹에서 스크랩하여 데이터베이스에 저장합니다.
+- **Auth Required**: Yes (JWT)
+- **Response**:
+  - **200 OK**
+    ```json
+    {
+      "message": "EPL 선수 데이터 스크랩 및 저장 완료"
+    }
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+
+### EPL 선수 데이터 동기화 (관리자용)
+- **URL**: `/api/epl-players/sync`
+- **Method**: `POST`
+- **Description**: 제공된 선수 데이터로 EPL 선수 데이터베이스를 동기화합니다.
+- **Auth Required**: Yes (JWT)
+- **Request Body**:
+  ```json
+  [
+    {
+      "name": "Player 1",
+      "position": "Goalkeeper",
+      "team": "Arsenal",
+      "attributes": { ... }
+    },
+    {
+      "name": "Player 2",
+      "position": "Defender",
+      "team": "Liverpool",
+      "attributes": { ... }
+    }
+  ]
+  ```
+- **Response**:
+  - **200 OK**
+    ```json
+    {
+      "message": "EPL 선수 데이터 동기화가 완료되었습니다.",
+      "syncedCount": 243,
+      "addedCount": 5,
+      "updatedCount": 18,
+      "removedCount": 2
+    }
+    ```
+  - **401 Unauthorized**: 인증되지 않은 접근
+  - **400 Bad Request**: 잘못된 입력 데이터
+
+## 4. 스쿼드 API
 
 ### 스쿼드 생성
 - **URL**: `/api/squads`
@@ -275,7 +615,7 @@
   - **401 Unauthorized**: 인증되지 않은 접근
   - **404 Not Found**: 스쿼드를 찾을 수 없음
 
-## 4. 매치 API
+## 5. 매치 API
 
 ### 빠른 매치 생성 (AI 상대)
 - **URL**: `/api/matches/quick`
@@ -558,7 +898,7 @@
   - **401 Unauthorized**: 인증되지 않은 접근
   - **404 Not Found**: 매치를 찾을 수 없음
 
-## 5. 웹소켓 API
+## 6. 웹소켓 API
 
 ### 연결
 - **URL**: `/api/socket`

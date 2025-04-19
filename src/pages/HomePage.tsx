@@ -184,19 +184,19 @@ const HomePage: React.FC = () => {
             {squads.length > 0 ? (
               squads.map((squad) => (
                 <StrategyItem
-                  key={squad.id}
-                  onClick={() => handleItemClick(squad.id)}
+                  key={squad._id}
+                  onClick={() => handleItemClick(squad._id)}
                 >
                   <StrategyName>{squad.name}</StrategyName>
                   <StrategyDescription>
                     {squad.formation} {squad.isActive && "(활성화됨)"}
                   </StrategyDescription>
-                  {expandedItemId === squad.id && (
+                  {expandedItemId === squad._id && (
                     <StrategyActions>
                       <EditButton
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditClick(squad.id);
+                          handleEditClick(squad._id);
                         }}
                       >
                         수정
@@ -204,7 +204,7 @@ const HomePage: React.FC = () => {
                       <QuickMatchButton
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleQuickMatch(squad.id);
+                          handleQuickMatch(squad._id);
                         }}
                       >
                         빠른대전
