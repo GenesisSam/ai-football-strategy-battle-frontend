@@ -1,90 +1,278 @@
 import React from "react";
+import styled, { keyframes } from "styled-components";
 
-// Props 인터페이스 정의
-interface AIStyleLoaderProps {
+type LoaderSize = "sm" | "md" | "lg";
+
+interface AIStyleLoadingProps {
   statusText?: string;
-  size?: "sm" | "md" | "lg";
+  size?: LoaderSize;
+  color?: string;
 }
 
-const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
+// Keyframes
+const spin = keyframes`
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
+const pulse = keyframes`
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+`;
+
+const ping = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+`;
+
+// Size mapping
+const getSize = (size: LoaderSize): string => {
+  switch (size) {
+    case "sm":
+      return "8rem"; // 128px
+    case "lg":
+      return "24rem"; // 384px
+    case "md":
+    default:
+      return "16rem"; // 256px
+  }
+};
+
+// Container
+const LoaderContainer = styled.div<{ size: LoaderSize }>`
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: ${(props) => getSize(props.size)};
+  height: ${(props) => getSize(props.size)};
+`;
+
+// Background triangular grid
+const BackgroundGrid = styled.div<{ color: string }>`
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+`;
+
+// Rotating triangles container
+const RotatingTrianglesContainer = styled.div`
+  position: absolute;
+  inset: 0;
+`;
+
+// Single rotating triangle
+const RotatingTriangle = styled.div<{ index: number; color: string }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .triangle-spinner {
+    position: relative;
+    width: 75%;
+    height: 75%;
+    animation: ${spin} linear infinite;
+    animation-duration: ${(props) => 10 + props.index * 5}s;
+    transform: rotate(${(props) => props.index * 120}deg);
+  }
+
+  .triangle-dot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: ${(props) => props.color};
+  }
+
+  .triangle-line {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0.125rem;
+    height: 50%;
+    background-color: ${(props) => props.color};
+    opacity: 0.4;
+  }
+`;
+
+// Holographic rings container
+const HolographicRingsContainer = styled.div`
+  position: absolute;
+  inset: 0;
+`;
+
+// Holographic ring
+const HolographicRing = styled.div<{ ring: number; color: string }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .ring {
+    width: 50%;
+    height: 50%;
+    border: 1px solid ${(props) => props.color};
+    opacity: 0.6;
+    transform: rotate(${(props) => props.ring * 30}deg);
+  }
+`;
+
+// Pulsing rings container
+const PulsingRingsContainer = styled.div`
+  position: absolute;
+  inset: 0;
+`;
+
+// Pulsing ring
+const PulsingRing = styled.div<{ ring: number; color: string }>`
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1px solid ${(props) => props.color};
+  opacity: 0;
+  animation: ${ping} cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation-duration: ${(props) => 2 + props.ring}s;
+  animation-delay: ${(props) => props.ring * 0.5}s;
+`;
+
+// Central element container
+const CentralElement = styled.div`
+  position: relative;
+  width: 33.333%;
+  height: 33.333%;
+`;
+
+// Triangle element
+const TriangleElement = styled.div<{ color: string }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .triangle {
+    width: 66.666%;
+    height: 66.666%;
+    background-color: ${(props) => props.color};
+    opacity: 0.2;
+    animation: ${pulse} 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  }
+`;
+
+// Center circle
+const CenterCircle = styled.div<{ color: string }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .outer-circle {
+    width: 50%;
+    height: 50%;
+    border-radius: 9999px;
+    border: 1px solid ${(props) => props.color};
+  }
+
+  .inner-circle {
+    position: absolute;
+    width: 33.333%;
+    height: 33.333%;
+    border-radius: 9999px;
+    background-color: ${(props) => props.color};
+    opacity: 0.3;
+    animation: ${pulse} 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+`;
+
+// Energy beams container
+const EnergyBeamsContainer = styled.div`
+  position: absolute;
+  inset: 0;
+`;
+
+// Energy beam
+const EnergyBeam = styled.div<{ angle: number; index: number; color: string }>`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(${(props) => props.angle}deg)
+    scaleX(0.7);
+  width: 100%;
+  height: 0.125rem;
+  background: linear-gradient(
+    to right,
+    transparent,
+    ${(props) => props.color},
+    transparent
+  );
+  opacity: 0.4;
+  animation-delay: ${(props) => props.index * 0.2}s;
+`;
+
+// Status text container
+const StatusTextContainer = styled.div<{ color: string }>`
+  position: absolute;
+  bottom: 1rem;
+  width: 100%;
+  text-align: center;
+  font-family: monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+  color: ${(props) => props.color};
+
+  .text-wrapper {
+    position: relative;
+  }
+
+  .glow-text {
+    position: absolute;
+    inset: 0;
+    filter: blur(4px);
+    animation: ${pulse} 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+`;
+
+const AIStyleLoading: React.FC<AIStyleLoadingProps> = ({
   statusText = "INITIALIZING SYSTEM",
   size = "md",
+  color = "#b946eb",
 }) => {
-  // Calculate size based on the prop
-  const getSizeClass = (): string => {
-    switch (size) {
-      case "sm":
-        return "w-32 h-32";
-      case "lg":
-        return "w-96 h-96";
-      case "md":
-      default:
-        return "w-64 h-64";
-    }
-  };
-
-  // Apply custom styles for animations
-  React.useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = `
-      @keyframes jarvis-ping {
-        0% {
-          transform: scale(1);
-          opacity: 0;
-        }
-        50% {
-          opacity: 0.3;
-        }
-        100% {
-          transform: scale(2);
-          opacity: 0;
-        }
-      }
-
-      .jarvis-animate-ping {
-        animation: jarvis-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-      }
-
-      @keyframes jarvis-pulse {
-        0%, 100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.5;
-        }
-      }
-
-      .jarvis-animate-pulse {
-        animation: jarvis-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-      }
-
-      @keyframes jarvis-spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .jarvis-animate-spin {
-        animation: jarvis-spin 1s linear infinite;
-      }
-    `;
-    document.head.appendChild(style);
-
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
+  // Generate a unique ID for SVG patterns
+  const patternId = React.useMemo(
+    () => `trianglePattern-${Math.random().toString(36).substr(2, 9)}`,
+    []
+  );
 
   return (
-    <div
-      className={`relative flex items-center justify-center ${getSizeClass()}`}
-    >
-      {/* Background triangular grid */}
-      <div className="absolute inset-0 opacity-20">
+    <LoaderContainer size={size}>
+      <BackgroundGrid color={color}>
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern
-              id="triGrid"
+              id={patternId}
               width="20"
               height="20"
               patternUnits="userSpaceOnUse"
@@ -93,108 +281,68 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
               <path
                 d="M0,0 L20,0 L10,17.32 Z"
                 fill="none"
-                stroke="#b946eb"
+                stroke={color}
                 strokeWidth="0.3"
                 transform="translate(0,0)"
               />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#triGrid)" />
+          <rect width="100%" height="100%" fill={`url(#${patternId})`} />
         </svg>
-      </div>
+      </BackgroundGrid>
 
-      {/* Rotating Triangles */}
-      <div className="absolute inset-0">
+      <RotatingTrianglesContainer>
         {[0, 1, 2].map((idx) => (
-          <div
-            key={idx}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            <div
-              className="relative w-3/4 h-3/4 jarvis-animate-spin"
-              style={{
-                animationDuration: `${10 + idx * 5}s`,
-                transform: `rotate(${idx * 120}deg)`,
-              }}
-            >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#b946eb] rounded-full"></div>
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-1/2 bg-[#b946eb] opacity-40"></div>
+          <RotatingTriangle key={idx} index={idx} color={color}>
+            <div className="triangle-spinner">
+              <div className="triangle-dot"></div>
+              <div className="triangle-line"></div>
             </div>
-          </div>
+          </RotatingTriangle>
         ))}
-      </div>
+      </RotatingTrianglesContainer>
 
-      {/* Holographic rings */}
-      <div className="absolute inset-0">
+      <HolographicRingsContainer>
         {[1, 2, 3].map((ring) => (
-          <div
-            key={ring}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            <div
-              className="w-1/2 h-1/2 border border-[#b946eb] opacity-60"
-              style={{ transform: `rotate(${ring * 30}deg)` }}
-            ></div>
-          </div>
+          <HolographicRing key={ring} ring={ring} color={color}>
+            <div className="ring"></div>
+          </HolographicRing>
         ))}
-      </div>
+      </HolographicRingsContainer>
 
-      {/* Pulsing rings */}
-      <div className="absolute inset-0">
+      <PulsingRingsContainer>
         {[1, 2].map((ring) => (
-          <div
-            key={ring}
-            className="absolute inset-0 border border-[#b946eb] rounded-full opacity-0 jarvis-animate-ping"
-            style={{
-              animationDuration: `${2 + ring}s`,
-              animationDelay: `${ring * 0.5}s`,
-            }}
-          ></div>
+          <PulsingRing key={ring} ring={ring} color={color} />
         ))}
-      </div>
+      </PulsingRingsContainer>
 
-      {/* Central element */}
-      <div className="relative w-1/3 h-1/3">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            className="w-2/3 h-2/3 bg-[#b946eb] opacity-20 jarvis-animate-pulse"
-            style={{ clipPath: "polygon(50% 0%, 100% 100%, 0% 100%)" }}
-          ></div>
-        </div>
+      <CentralElement>
+        <TriangleElement color={color}>
+          <div className="triangle"></div>
+        </TriangleElement>
 
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-1/2 h-1/2 border border-[#b946eb] rounded-full"></div>
-          <div className="absolute w-1/3 h-1/3 bg-[#b946eb] rounded-full opacity-30 jarvis-animate-pulse"></div>
-        </div>
-      </div>
+        <CenterCircle color={color}>
+          <div className="outer-circle"></div>
+          <div className="inner-circle"></div>
+        </CenterCircle>
+      </CentralElement>
 
-      {/* Energy beams */}
-      <div className="absolute inset-0">
+      <EnergyBeamsContainer>
         {[0, 60, 120, 180, 240, 300].map((angle, idx) => (
-          <div
-            key={idx}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-0.5 bg-gradient-to-r from-transparent via-[#b946eb] to-transparent opacity-40"
-            style={{
-              transform: `rotate(${angle}deg) scaleX(0.7)`,
-              animationDelay: `${idx * 0.2}s`,
-            }}
-          ></div>
+          <EnergyBeam key={idx} angle={angle} index={idx} color={color} />
         ))}
-      </div>
+      </EnergyBeamsContainer>
 
-      {/* Status text with glowing effect */}
       {statusText && (
-        <div className="absolute bottom-4 w-full text-center text-[#b946eb] font-mono text-sm tracking-wider">
-          <span className="relative">
-            <span className="absolute inset-0 jarvis-animate-pulse blur-sm">
-              {statusText}
-            </span>
+        <StatusTextContainer color={color}>
+          <span className="text-wrapper">
+            <span className="glow-text">{statusText}</span>
             {statusText}
           </span>
-        </div>
+        </StatusTextContainer>
       )}
-    </div>
+    </LoaderContainer>
   );
 };
 
-export default AIStyleLoader;
+export default AIStyleLoading;

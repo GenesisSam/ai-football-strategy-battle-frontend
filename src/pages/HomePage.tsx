@@ -212,7 +212,7 @@ const HomePage: React.FC = () => {
                       <LongMatchButton
                         onClick={(e) => {
                           e.stopPropagation();
-                          alert("준비중인 기능입니다.");
+                          navigate(`/match-simulator/${squad._id}`);
                         }}
                       >
                         5분대전

@@ -65,25 +65,40 @@ export interface MatchAnalysis {
   improvementSuggestions: { home: string; away: string };
 }
 
+// 매치 작업 상태 인터페이스
+export interface MatchJob {
+  jobId: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  createdAt: string;
+  matchId?: string;
+  result?: {
+    homeScore: number;
+    awayScore: number;
+    winner: "home" | "away" | "draw";
+  };
+  error?: string;
+}
+
 // 빠른 매치 생성 (AI 상대)
 export const createQuickMatch = async (squadId: string): Promise<Match> => {
   const response = await apiClient.post<Match>("/matches/quick", { squadId });
   return response.data;
 };
 
-// 게임 매치 생성 (다른 사용자)
+// 게임 매치 생성 (비동기 방식으로 변경)
 export const createGameMatch = async (
   squadId: string
-): Promise<{
-  message: string;
-  queuePosition: number;
-  estimatedWaitTime: string;
-}> => {
-  const response = await apiClient.post<{
-    message: string;
-    queuePosition: number;
-    estimatedWaitTime: string;
-  }>("/matches/game", { squadId });
+): Promise<{ jobId: string; message: string }> => {
+  const response = await apiClient.post<{ jobId: string; message: string }>(
+    "/matches/game",
+    { squadId }
+  );
+  return response.data;
+};
+
+// 매치 작업 상태 조회
+export const checkMatchJobStatus = async (jobId: string): Promise<MatchJob> => {
+  const response = await apiClient.get<MatchJob>(`/matches/jobs/${jobId}`);
   return response.data;
 };
 

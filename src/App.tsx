@@ -16,6 +16,7 @@ import MatchProvider from "./context/MatchContext";
 // 페이지 컴포넌트
 import HomePage from "./pages/HomePage";
 import StrategyPage from "./pages/StrategyPage";
+import MatchSimulator from "./pages/MatchSimulator";
 import Layout from "./components/layout/Layout";
 
 // 라우트 가드 컴포넌트 (인증 상태에 따라 접근 제어)
@@ -41,6 +42,10 @@ function App() {
                       <Route path="new" element={<StrategyPage />} />
                       <Route path=":id" element={<StrategyPage />} />
                     </Route>
+                    <Route
+                      path="match-simulator/:id"
+                      Component={MatchSimulator}
+                    />
                   </Route>
 
                   {/* 404 페이지 */}

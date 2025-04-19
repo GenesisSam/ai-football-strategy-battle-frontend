@@ -27,7 +27,7 @@ export interface Player {
 
 // 스쿼드 인터페이스
 export interface Squad {
-  id: string;
+  _id: string;
   name: string;
   formation: string;
   players: Player[];

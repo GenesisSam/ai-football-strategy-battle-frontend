@@ -90,7 +90,7 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
       // 활성 스쿼드 설정
       const active = squadList.find((squad) => squad.isActive);
       if (active) {
-        const activeSquadDetails = await getSquadById(active.id);
+        const activeSquadDetails = await getSquadById(active._id);
         setActiveSquad(activeSquadDetails);
       }
     } catch (err) {
@@ -151,7 +151,7 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
       await fetchSquads();
 
       // 활성 스쿼드 갱신
-      if (activeSquad?.id === id) {
+      if (activeSquad?._id === id) {
         setActiveSquad(updatedSquad);
       }
 
@@ -176,7 +176,7 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
       await fetchSquads();
 
       // 활성 스쿼드 제거
-      if (activeSquad?.id === id) {
+      if (activeSquad?._id === id) {
         setActiveSquad(null);
       }
 
