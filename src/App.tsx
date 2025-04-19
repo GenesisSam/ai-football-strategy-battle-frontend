@@ -15,7 +15,11 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
-            <Route path="strategy" element={<StrategyPage />} />
+            <Route path="strategy">
+              <Route index element={<StrategyPage />} />
+              <Route path="create" element={<StrategyPage mode="create" />} />
+              <Route path=":id" element={<StrategyPage mode="view" />} />
+            </Route>
             <Route path="match" element={<MatchPage />} />
           </Route>
         </Routes>
