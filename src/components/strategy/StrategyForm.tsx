@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import styled from "styled-components";
 
 const FormSection = styled.div`
@@ -58,6 +58,28 @@ const StrategyForm: React.FC<StrategyFormProps> = React.memo(
     onDefenseStyleChange,
     onSpecialInstructionsChange,
   }) => {
+    // 인라인 함수 대신 useCallback으로 이벤트 핸들러 메모이제이션
+    const handleAttackStyleChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onAttackStyleChange(e.target.value);
+      },
+      [onAttackStyleChange]
+    );
+
+    const handleDefenseStyleChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onDefenseStyleChange(e.target.value);
+      },
+      [onDefenseStyleChange]
+    );
+
+    const handleSpecialInstructionsChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onSpecialInstructionsChange(e.target.value);
+      },
+      [onSpecialInstructionsChange]
+    );
+
     return (
       <FormSection>
         <SectionTitle>전략 구성</SectionTitle>
@@ -67,7 +89,7 @@ const StrategyForm: React.FC<StrategyFormProps> = React.memo(
           <TextArea
             id="attackStyle"
             value={attackStyle}
-            onChange={(e) => onAttackStyleChange(e.target.value)}
+            onChange={handleAttackStyleChange}
             placeholder="예: 빠른 역습, 점유율 기반 공격, 측면 활용 등"
           />
         </FormGroup>
@@ -77,7 +99,7 @@ const StrategyForm: React.FC<StrategyFormProps> = React.memo(
           <TextArea
             id="defenseStyle"
             value={defenseStyle}
-            onChange={(e) => onDefenseStyleChange(e.target.value)}
+            onChange={handleDefenseStyleChange}
             placeholder="예: 높은 압박, 낮은 블록, 오프사이드 트랩 등"
           />
         </FormGroup>
@@ -87,7 +109,7 @@ const StrategyForm: React.FC<StrategyFormProps> = React.memo(
           <TextArea
             id="specialInstructions"
             value={specialInstructions}
-            onChange={(e) => onSpecialInstructionsChange(e.target.value)}
+            onChange={handleSpecialInstructionsChange}
             placeholder="예: 특정 선수에 대한 지시, 세트 피스 전략 등"
           />
         </FormGroup>

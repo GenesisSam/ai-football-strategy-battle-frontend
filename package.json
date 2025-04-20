@@ -12,6 +12,7 @@
   "dependencies": {
     "@types/lodash.debounce": "^4.0.9",
     "axios": "^1.8.4",
+    "axios-cache-interceptor": "^1.7.0",
     "lodash.debounce": "^4.0.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

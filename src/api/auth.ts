@@ -7,12 +7,6 @@ export interface User {
   email: string;
   mmr: number;
   statistics: {
-    totalMatches: number;
-    wins: number;
-    draws: number;
-    losses: number;
-    goalScored: number;
-    goalConceded: number;
     _id: string;
   };
 }

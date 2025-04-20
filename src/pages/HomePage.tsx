@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, use } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import SplashScreen from "../components/SplashScreen";
@@ -72,24 +72,6 @@ const EditButton = styled(ActionButton)`
   }
 `;
 
-const QuickMatchButton = styled(ActionButton)`
-  background-color: ${({ theme }) => theme.colors.success};
-  color: white;
-
-  &:hover {
-    background-color: #2d9300;
-  }
-`;
-
-const LongMatchButton = styled(ActionButton)`
-  background-color: ${({ theme }) => theme.colors.warning};
-  color: white;
-
-  &:hover {
-    background-color: #e0a800;
-  }
-`;
-
 const EmptyMessage = styled.p`
   color: ${({ theme }) => theme.colors.neutral};
   font-size: ${({ theme }) => theme.fonts.bodySize};
@@ -146,17 +128,6 @@ const HomePage: React.FC = () => {
     [navigate]
   );
 
-  const handleQuickMatch = useCallback(
-    (squadId: string) => {
-      activateExistingSquad(squadId).then((success) => {
-        if (success) {
-          alert("준비중인 기능입니다.");
-        }
-      });
-    },
-    [activateExistingSquad]
-  );
-
   if (isAuthLoading || (isAuthenticated && isSquadLoading)) {
     return (
       <div
@@ -201,22 +172,6 @@ const HomePage: React.FC = () => {
                       >
                         수정
                       </EditButton>
-                      <QuickMatchButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickMatch(squad._id);
-                        }}
-                      >
-                        빠른대전
-                      </QuickMatchButton>
-                      <LongMatchButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/match-simulator/${squad._id}`);
-                        }}
-                      >
-                        5분대전
-                      </LongMatchButton>
                     </StrategyActions>
                   )}
                 </StrategyItem>

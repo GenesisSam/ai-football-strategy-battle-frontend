@@ -1,3 +1,4 @@
+import React, { lazy, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -11,16 +12,19 @@ import theme from "./styles/theme";
 // 컨텍스트 프로바이더
 import AuthProvider from "./context/AuthContext";
 import SquadProvider from "./context/SquadContext";
-import MatchProvider from "./context/MatchContext";
 
-// 페이지 컴포넌트
-import HomePage from "./pages/HomePage";
-import StrategyPage from "./pages/StrategyPage";
-import MatchSimulator from "./pages/MatchSimulator";
+// 로딩 컴포넌트
+import SplashScreen from "./components/SplashScreen";
+
+// 레이아웃 컴포넌트
 import Layout from "./components/layout/Layout";
 
 // 라우트 가드 컴포넌트 (인증 상태에 따라 접근 제어)
 import ProtectedRoute from "./components/ProtectedRoute";
+
+// 코드 스플리팅을 위한 지연 로딩
+const HomePage = lazy(() => import("./pages/HomePage"));
+const StrategyPage = lazy(() => import("./pages/StrategyPage"));
 
 function App() {
   return (
@@ -28,8 +32,8 @@ function App() {
       <GlobalStyle />
       <AuthProvider>
         <SquadProvider>
-          <MatchProvider>
-            <Router>
+          <Router>
+            <Suspense fallback={<SplashScreen />}>
               <Routes>
                 {/* 공개 라우트 */}
                 <Route path="/" element={<Layout />}>
@@ -42,10 +46,6 @@ function App() {
                       <Route path="new" element={<StrategyPage />} />
                       <Route path=":id" element={<StrategyPage />} />
                     </Route>
-                    <Route
-                      path="match-simulator/:id"
-                      Component={MatchSimulator}
-                    />
                   </Route>
 
                   {/* 404 페이지 */}
@@ -55,8 +55,8 @@ function App() {
                   />
                 </Route>
               </Routes>
-            </Router>
-          </MatchProvider>
+            </Suspense>
+          </Router>
         </SquadProvider>
       </AuthProvider>
     </ThemeProvider>

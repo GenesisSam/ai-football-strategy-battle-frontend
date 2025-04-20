@@ -4,6 +4,8 @@ import React, {
   useEffect,
   useContext,
   ReactNode,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   Squad,
@@ -67,18 +69,8 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
 
   const { user, isAuthenticated } = useAuth();
 
-  // 사용자 인증 상태 변경 시 스쿼드 목록 조회
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchSquads();
-    } else {
-      setSquads([]);
-      setActiveSquad(null);
-    }
-  }, [isAuthenticated]);
-
-  // 스쿼드 목록 조회
-  const fetchSquads = async () => {
+  // 스쿼드 목록 조회 함수를 useCallback으로 최적화
+  const fetchSquads = useCallback(async () => {
     if (!isAuthenticated) return;
 
     try {
@@ -92,6 +84,8 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
       if (active) {
         const activeSquadDetails = await getSquadById(active._id);
         setActiveSquad(activeSquadDetails);
+      } else {
+        setActiveSquad(null);
       }
     } catch (err) {
       console.error("Error fetching squads:", err);
@@ -99,129 +93,166 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isAuthenticated]);
+
+  // 사용자 인증 상태 변경 시 스쿼드 목록 조회
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSquads();
+    } else {
+      setSquads([]);
+      setActiveSquad(null);
+    }
+  }, [isAuthenticated, fetchSquads]);
 
   // 스쿼드 상세 정보 조회
-  const fetchSquadById = async (id: string): Promise<Squad | null> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const squad = await getSquadById(id);
-      return squad;
-    } catch (err) {
-      console.error(`Error fetching squad ${id}:`, err);
-      setError("스쿼드 정보를 불러오는 중 오류가 발생했습니다.");
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const fetchSquadById = useCallback(
+    async (id: string): Promise<Squad | null> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const squad = await getSquadById(id);
+        return squad;
+      } catch (err) {
+        console.error(`Error fetching squad ${id}:`, err);
+        setError("스쿼드 정보를 불러오는 중 오류가 발생했습니다.");
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   // 새 스쿼드 생성
-  const createNewSquad = async (data: SquadRequest): Promise<Squad | null> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const newSquad = await createSquad(data);
+  const createNewSquad = useCallback(
+    async (data: SquadRequest): Promise<Squad | null> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const newSquad = await createSquad(data);
 
-      // 스쿼드 목록 갱신
-      await fetchSquads();
+        // 스쿼드 목록 갱신
+        await fetchSquads();
 
-      return newSquad;
-    } catch (err) {
-      console.error("Error creating squad:", err);
-      setError("스쿼드 생성 중 오류가 발생했습니다.");
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        return newSquad;
+      } catch (err) {
+        console.error("Error creating squad:", err);
+        setError("스쿼드 생성 중 오류가 발생했습니다.");
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchSquads]
+  );
 
   // 스쿼드 정보 수정
-  const updateExistingSquad = async (
-    id: string,
-    data: SquadRequest
-  ): Promise<Squad | null> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const updatedSquad = await updateSquad(id, data);
+  const updateExistingSquad = useCallback(
+    async (id: string, data: SquadRequest): Promise<Squad | null> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const updatedSquad = await updateSquad(id, data);
 
-      // 스쿼드 목록 갱신
-      await fetchSquads();
+        // 스쿼드 목록 갱신
+        await fetchSquads();
 
-      // 활성 스쿼드 갱신
-      if (activeSquad?._id === id) {
-        setActiveSquad(updatedSquad);
+        // 활성 스쿼드 갱신
+        if (activeSquad?._id === id) {
+          setActiveSquad(updatedSquad);
+        }
+
+        return updatedSquad;
+      } catch (err) {
+        console.error(`Error updating squad ${id}:`, err);
+        setError("스쿼드 수정 중 오류가 발생했습니다.");
+        return null;
+      } finally {
+        setIsLoading(false);
       }
-
-      return updatedSquad;
-    } catch (err) {
-      console.error(`Error updating squad ${id}:`, err);
-      setError("스쿼드 수정 중 오류가 발생했습니다.");
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [fetchSquads, activeSquad]
+  );
 
   // 스쿼드 삭제
-  const deleteExistingSquad = async (id: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      await deleteSquad(id);
+  const deleteExistingSquad = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        await deleteSquad(id);
 
-      // 스쿼드 목록 갱신
-      await fetchSquads();
+        // 스쿼드 목록 갱신
+        await fetchSquads();
 
-      // 활성 스쿼드 제거
-      if (activeSquad?._id === id) {
-        setActiveSquad(null);
+        // 활성 스쿼드 제거
+        if (activeSquad?._id === id) {
+          setActiveSquad(null);
+        }
+
+        return true;
+      } catch (err) {
+        console.error(`Error deleting squad ${id}:`, err);
+        setError("스쿼드 삭제 중 오류가 발생했습니다.");
+        return false;
+      } finally {
+        setIsLoading(false);
       }
-
-      return true;
-    } catch (err) {
-      console.error(`Error deleting squad ${id}:`, err);
-      setError("스쿼드 삭제 중 오류가 발생했습니다.");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [fetchSquads, activeSquad]
+  );
 
   // 스쿼드 활성화
-  const activateExistingSquad = async (id: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      await activateSquad(id);
+  const activateExistingSquad = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        await activateSquad(id);
 
-      // 스쿼드 목록 갱신
-      await fetchSquads();
+        // 스쿼드 목록 갱신
+        await fetchSquads();
 
-      return true;
-    } catch (err) {
-      console.error(`Error activating squad ${id}:`, err);
-      setError("스쿼드 활성화 중 오류가 발생했습니다.");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        return true;
+      } catch (err) {
+        console.error(`Error activating squad ${id}:`, err);
+        setError("스쿼드 활성화 중 오류가 발생했습니다.");
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchSquads]
+  );
 
-  const contextValue = {
-    squads,
-    activeSquad,
-    isLoading,
-    error,
-    fetchSquads,
-    fetchSquadById,
-    createNewSquad,
-    updateExistingSquad,
-    deleteExistingSquad,
-    activateExistingSquad,
-  };
+  // useMemo로 컨텍스트 값 캐싱하여 불필요한 리렌더링 방지
+  const contextValue = useMemo(
+    () => ({
+      squads,
+      activeSquad,
+      isLoading,
+      error,
+      fetchSquads,
+      fetchSquadById,
+      createNewSquad,
+      updateExistingSquad,
+      deleteExistingSquad,
+      activateExistingSquad,
+    }),
+    [
+      squads,
+      activeSquad,
+      isLoading,
+      error,
+      fetchSquads,
+      fetchSquadById,
+      createNewSquad,
+      updateExistingSquad,
+      deleteExistingSquad,
+      activateExistingSquad,
+    ]
+  );
 
   return (
     <SquadContext.Provider value={contextValue}>

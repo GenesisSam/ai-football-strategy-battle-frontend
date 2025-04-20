@@ -1,78 +1,8 @@
 import { io, Socket } from "socket.io-client";
-import { MatchEvent } from "./match";
 
-// 웹소켓 이벤트 타입
-export enum SocketEvents {
-  SUBSCRIBE_MATCH = "subscribe_match",
-  MATCH_EVENT = "match_event",
-  MATCH_STATUS_CHANGE = "match_status_change",
-  MATCHMAKING_STATUS = "matchmaking_status",
-  // 새로운 비동기 매치 이벤트
-  SUBSCRIBE_JOB = "match:subscribeJob",
-  UNSUBSCRIBE_JOB = "match:unsubscribeJob",
-  JOB_STATUS = "match:jobStatus",
-  JOB_COMPLETED = "match:jobCompleted",
-}
-
-// 이벤트 타입 매핑
-interface EventTypeMap {
-  [SocketEvents.MATCH_EVENT]: MatchEventMessage;
-  [SocketEvents.MATCH_STATUS_CHANGE]: MatchStatusChange;
-  [SocketEvents.MATCHMAKING_STATUS]: MatchmakingStatus;
-  [SocketEvents.JOB_STATUS]: MatchJobStatus;
-  [SocketEvents.JOB_COMPLETED]: MatchJobCompleted;
-}
-
-// 매치메이킹 상태 인터페이스
-export interface MatchmakingStatus {
-  status: "searching" | "matched" | "error";
-  queuePosition?: number;
-  estimatedWaitTime?: string;
-  matchId?: string;
-  errorMessage?: string;
-  opponent?: {
-    username: string;
-    squadName: string;
-  };
-}
-
-// 매치 상태 변경 인터페이스
-export interface MatchStatusChange {
-  matchId: string;
-  status: "scheduled" | "in_progress" | "completed";
-  timestamp: string;
-}
-
-// 매치 이벤트 메시지 인터페이스
-export interface MatchEventMessage {
-  matchId: string;
-  event: MatchEvent;
-}
-
-// 매치 작업 상태 인터페이스
-export interface MatchJobStatus {
-  jobId: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  matchId?: string;
-  error?: string;
-}
-
-// 매치 작업 완료 인터페이스
-export interface MatchJobCompleted {
-  jobId: string;
-  matchId: string;
-  result: {
-    homeScore: number;
-    awayScore: number;
-    winner: "home" | "away" | "draw";
-  };
-}
-
-// 구독 응답 인터페이스
-interface SubscriptionResponse {
-  status: "success" | "error";
-  message?: string;
-}
+// 웹소켓 이벤트 타입 - Match 관련 이벤트 제거
+export enum SocketEvents {}
+// 기본 소켓 이벤트만 남김
 
 // 이벤트 리스너 타입
 type EventListener<T = any> = (data: T) => void;
@@ -87,7 +17,7 @@ class SocketClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private connectionInProgress: boolean = false; // 연결 시도 중인지 추적하는 플래그
 
-  // 소켓 연결
+  // 소켓 연결 메서드 개선
   connect(token: string): Promise<boolean> {
     // 연결 시도 중이면 대기
     if (this.connectionInProgress) {
@@ -120,19 +50,28 @@ class SocketClient {
       // 소켓 연결 옵션
       const socketOptions = {
         auth: { token },
-        transports: ["websocket"] as const,
+        transports: ["websocket", "polling"] as const,
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.reconnectInterval,
         timeout: 10000, // 연결 타임아웃 설정
       };
 
+      // 연결 타임아웃 설정 (15초에서 8초로 단축)
+      const connectionTimeout = setTimeout(() => {
+        console.error("WebSocket 연결 타임아웃");
+        this.connectionInProgress = false;
+        resolve(false);
+        this.handleReconnect(); // 타임아웃 시에도 재연결 시도
+      }, 8000);
+
       try {
-        // 소켓 연결
-        this.socket = io(`${API_BASE_URL}/socket`, socketOptions);
+        // 소켓 연결 (기본 네임스페이스 "/" 사용)
+        this.socket = io(`${API_BASE_URL}`, socketOptions);
 
         // 연결 이벤트 핸들러 설정
         this.socket.once("connect", () => {
+          clearTimeout(connectionTimeout); // 타임아웃 해제
           console.log("WebSocket connected");
           this.reconnectAttempts = 0; // 연결 성공 시 재연결 시도 카운터 초기화
           this.connectionInProgress = false;
@@ -140,6 +79,7 @@ class SocketClient {
         });
 
         this.socket.once("connect_error", (error: Error) => {
+          clearTimeout(connectionTimeout); // 타임아웃 해제
           console.error("WebSocket 연결 오류:", error.message);
           this.connectionInProgress = false;
           resolve(false);
@@ -149,6 +89,7 @@ class SocketClient {
         // 기본 이벤트 리스너 설정
         this.setupListeners();
       } catch (err) {
+        clearTimeout(connectionTimeout); // 타임아웃 해제
         console.error("WebSocket 연결 중 오류:", err);
         this.connectionInProgress = false;
         resolve(false);
@@ -157,39 +98,38 @@ class SocketClient {
     });
   }
 
-  // 자동 재연결 처리
+  // 자동 재연결 처리 개선
   private handleReconnect(): void {
-    // 이미 재연결 타이머가 설정되어 있으면 중복 실행 방지
-    if (this.reconnectTimer) {
-      console.log("이미 재연결 시도가 예약되어 있습니다.");
+    if (
+      !this.token ||
+      this.reconnectAttempts >= this.maxReconnectAttempts ||
+      this.socket?.connected ||
+      this.connectionInProgress
+    ) {
       return;
     }
-
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(
-        `최대 재연결 시도 횟수(${this.maxReconnectAttempts}회)를 초과했습니다.`
-      );
-      return;
-    }
-
-    // 지수 백오프로 재연결 간격 증가
-    const delay = Math.min(
-      this.reconnectInterval * Math.pow(1.5, this.reconnectAttempts),
-      30000 // 최대 30초
-    );
 
     console.log(
-      `${delay}ms 후 WebSocket 재연결 시도 (${this.reconnectAttempts + 1}/${
+      `WebSocket 재연결 시도 ${this.reconnectAttempts + 1}/${
         this.maxReconnectAttempts
-      })...`
+      }`
     );
 
+    // 지수 백오프 적용 (최대 30초)
+    const delay = Math.min(
+      this.reconnectInterval * Math.pow(1.5, this.reconnectAttempts),
+      30000
+    );
+
+    this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      if (this.token) {
-        this.reconnectAttempts++;
-        this.connect(this.token);
-      }
+      this.connect(this.token!).then((connected) => {
+        if (!connected && this.reconnectAttempts < this.maxReconnectAttempts) {
+          console.log(
+            `재연결 실패, ${this.reconnectAttempts}/${this.maxReconnectAttempts} 번째 시도`
+          );
+        }
+      });
     }, delay);
   }
 
@@ -213,7 +153,7 @@ class SocketClient {
     this.connectionInProgress = false;
   }
 
-  // 기본 이벤트 리스너 설정
+  // 기본 이벤트 리스너 설정 - 매치 관련 리스너 제거
   private setupListeners(): void {
     if (!this.socket) {
       return;
@@ -244,98 +184,12 @@ class SocketClient {
     this.socket.on("error", (error: Error) => {
       console.error("WebSocket 오류:", error);
     });
-
-    // 매치 이벤트 리스너
-    this.socket.on(SocketEvents.MATCH_EVENT, (message: MatchEventMessage) => {
-      this.notifyListeners(SocketEvents.MATCH_EVENT, message);
-    });
-
-    // 매치 상태 변경 리스너
-    this.socket.on(
-      SocketEvents.MATCH_STATUS_CHANGE,
-      (change: MatchStatusChange) => {
-        this.notifyListeners(SocketEvents.MATCH_STATUS_CHANGE, change);
-      }
-    );
-
-    // 매치메이킹 상태 리스너
-    this.socket.on(
-      SocketEvents.MATCHMAKING_STATUS,
-      (status: MatchmakingStatus) => {
-        this.notifyListeners(SocketEvents.MATCHMAKING_STATUS, status);
-      }
-    );
-
-    // 작업 상태 업데이트 리스너
-    this.socket.on(SocketEvents.JOB_STATUS, (status: MatchJobStatus) => {
-      this.notifyListeners(SocketEvents.JOB_STATUS, status);
-    });
-
-    // 작업 완료 리스너
-    this.socket.on(SocketEvents.JOB_COMPLETED, (data: MatchJobCompleted) => {
-      this.notifyListeners(SocketEvents.JOB_COMPLETED, data);
-    });
-  }
-
-  // 특정 매치 이벤트 구독
-  subscribeToMatch(matchId: string): Promise<boolean> {
-    if (!this.socket) {
-      return Promise.reject(new Error("WebSocket is not connected"));
-    }
-
-    return new Promise((resolve) => {
-      this.socket!.emit(
-        SocketEvents.SUBSCRIBE_MATCH,
-        { matchId },
-        (response: SubscriptionResponse) => {
-          if (response.status === "success") {
-            resolve(true);
-          } else {
-            console.error("매치 구독 실패:", response.message);
-            resolve(false);
-          }
-        }
-      );
-    });
-  }
-
-  // 특정 작업 상태 구독
-  subscribeToJobStatus(jobId: string): Promise<boolean> {
-    if (!this.socket) {
-      return Promise.reject(new Error("WebSocket is not connected"));
-    }
-
-    return new Promise((resolve) => {
-      this.socket!.emit(
-        SocketEvents.SUBSCRIBE_JOB,
-        { jobId },
-        (response: SubscriptionResponse) => {
-          if (response.status === "success") {
-            resolve(true);
-          } else {
-            console.error("작업 구독 실패:", response.message);
-            resolve(false);
-          }
-        }
-      );
-    });
-  }
-
-  // 작업 상태 구독 취소
-  unsubscribeFromJobStatus(jobId: string): void {
-    if (!this.socket) {
-      return;
-    }
-
-    this.socket.emit(SocketEvents.UNSUBSCRIBE_JOB, { jobId });
   }
 
   // 타입 안전성을 갖춘 이벤트 리스너 등록
   addEventListener<E extends SocketEvents>(
     event: E,
-    callback: EventListener<
-      E extends keyof EventTypeMap ? EventTypeMap[E] : any
-    >
+    callback: EventListener<any>
   ): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set<EventListener>());
@@ -347,9 +201,7 @@ class SocketClient {
   // 이벤트 리스너 제거
   removeEventListener<E extends SocketEvents>(
     event: E,
-    callback: EventListener<
-      E extends keyof EventTypeMap ? EventTypeMap[E] : any
-    >
+    callback: EventListener<any>
   ): void {
     if (!this.listeners.has(event)) {
       return;
@@ -364,10 +216,7 @@ class SocketClient {
   }
 
   // 이벤트 리스너에게 알림
-  private notifyListeners<E extends SocketEvents>(
-    event: E,
-    data: E extends keyof EventTypeMap ? EventTypeMap[E] : any
-  ): void {
+  private notifyListeners<E extends SocketEvents>(event: E, data: any): void {
     if (!this.listeners.has(event)) {
       return;
     }

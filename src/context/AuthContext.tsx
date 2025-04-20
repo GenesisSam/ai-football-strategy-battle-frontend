@@ -42,6 +42,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [initialAuthChecked, setInitialAuthChecked] = useState<boolean>(false);
 
+  // useCallback에 적절한 의존성 추가 (setUser가 필요)
   const getGameProfileWithAutoSign = useCallback(
     async (name: string, email: string, password: string) => {
       try {
@@ -57,71 +58,79 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           } catch (err) {
             if ((err as AxiosError).response?.status === 401) {
               await register(name, email, password);
-              getGameProfileWithAutoSign(name, email, password);
+              // 재귀적 호출 대신 반환 값을 직접 사용하여 스택 오버플로우 방지
+              const registerRes = await login(email, password);
+              localStorage.setItem("token", registerRes.access_token);
+              setUser(registerRes.user);
             }
           }
         }
       }
     },
-    []
+    [setUser] // setUser가 의존성으로 추가되어야 함
   );
 
   // 앱 초기화 시 사용자 정보 복원
   useEffect(() => {
     const initializeAuth = async () => {
+      if (refLoginProcessing.current) return;
+
       refLoginProcessing.current = true;
       let _moimUser: Record<string, any> | undefined = undefined;
 
-      if (window.__INIT_STATE__?.currentUser) {
-        _moimUser = window.__INIT_STATE__.currentUser;
-        setMoimUser(window.__INIT_STATE__.currentUser);
-      }
-      // window.__INIT_STATE__ 확인, authToken 존재 시 API 호출
-      else if (window.__INIT_STATE__?.authToken) {
-        try {
-          const response = await axios.get("https://vingle.network/api/me", {
-            headers: {
-              Authorization: `Bearer ${window.__INIT_STATE__.authToken}`,
-            },
-          });
-
-          if (response.data) {
-            // 사용자 정보 상태 업데이트
-            _moimUser = response.data;
-            setMoimUser(response.data);
-          }
-        } catch (error) {
-          console.error("Failed to fetch user data from Vingle API:", error);
+      try {
+        if (window.__INIT_STATE__?.currentUser) {
+          _moimUser = window.__INIT_STATE__.currentUser;
+          setMoimUser(window.__INIT_STATE__.currentUser);
         }
-      }
+        // window.__INIT_STATE__ 확인, authToken 존재 시 API 호출
+        else if (window.__INIT_STATE__?.authToken) {
+          try {
+            const response = await axios.get("https://vingle.network/api/me", {
+              headers: {
+                Authorization: `Bearer ${window.__INIT_STATE__.authToken}`,
+              },
+            });
 
-      if (_moimUser) {
-        await getGameProfileWithAutoSign(
-          _moimUser.name,
-          `${_moimUser.id}@aifsb.io`,
-          _moimUser.id
-        );
-      }
+            if (response.data) {
+              // 사용자 정보 상태 업데이트
+              _moimUser = response.data;
+              setMoimUser(response.data);
+            }
+          } catch (error) {
+            console.error("Failed to fetch user data from Vingle API:", error);
+          }
+        }
 
-      setInitialAuthChecked(true);
-      setIsLoading(false);
-      refLoginProcessing.current = false;
+        if (_moimUser) {
+          await getGameProfileWithAutoSign(
+            _moimUser.name,
+            `${_moimUser.id}@aifsb.io`,
+            _moimUser.id
+          );
+        }
+      } catch (error) {
+        console.error("Error during authentication initialization:", error);
+      } finally {
+        setInitialAuthChecked(true);
+        setIsLoading(false);
+        refLoginProcessing.current = false;
+      }
     };
 
-    if (!refLoginProcessing.current) {
-      initializeAuth();
-    }
-  }, []);
+    initializeAuth();
+  }, [getGameProfileWithAutoSign]); // getGameProfileWithAutoSign 의존성 추가
 
-  const contextValue = {
+  const authValue = {
     user,
     isLoading,
     isAuthenticated: !!user,
     moimUser,
   };
 
+  // useMemo로 컨텍스트 값 최적화
   return (
-    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
   );
 };
 
