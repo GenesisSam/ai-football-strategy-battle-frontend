@@ -1,18 +1,34 @@
 import { authFetch } from "./client";
-import { MatchData, MatchEvent, MatchStatistics } from "../types/global";
+import {
+  MatchData,
+  MatchEvent,
+  MatchStatistics,
+  MatchStatus,
+} from "../types/global.d";
 
-const API_BASE = "/api/matches";
+const API_BASE = "/matches";
+
+// 로그 헬퍼 함수
+const logAPI = (action: string, data?: any) => {
+  console.log(`[Match API] ${action}`, data || "");
+};
 
 /**
  * 빠른 대전 매치 생성
  */
 export const createQuickMatch = async (squadId: string): Promise<MatchData> => {
-  const response = await authFetch(`${API_BASE}/quick`, {
-    method: "POST",
-    body: JSON.stringify({ squadId }),
-  });
-
-  return response;
+  logAPI("빠른 대전 매치 생성 요청", { squadId });
+  try {
+    const response = await authFetch(`${API_BASE}/quick`, {
+      method: "POST",
+      body: JSON.stringify({ squadId }),
+    });
+    logAPI("빠른 대전 매치 생성 성공", response);
+    return response;
+  } catch (error) {
+    logAPI("빠른 대전 매치 생성 실패", error);
+    throw error;
+  }
 };
 
 /**
@@ -21,12 +37,18 @@ export const createQuickMatch = async (squadId: string): Promise<MatchData> => {
 export const createGameMatch = async (
   squadId: string
 ): Promise<{ jobId: string; message: string }> => {
-  const response = await authFetch(`${API_BASE}/game`, {
-    method: "POST",
-    body: JSON.stringify({ squadId }),
-  });
-
-  return response;
+  logAPI("게임 대전 매치 생성 요청", { squadId });
+  try {
+    const response = await authFetch(`${API_BASE}/game`, {
+      method: "POST",
+      body: JSON.stringify({ squadId }),
+    });
+    logAPI("게임 대전 매치 생성 성공", response);
+    return response;
+  } catch (error) {
+    logAPI("게임 대전 매치 생성 실패", error);
+    throw error;
+  }
 };
 
 /**
@@ -46,16 +68,30 @@ export const getMatchJobStatus = async (
     winner: "home" | "away" | "draw";
   };
 }> => {
-  const response = await authFetch(`${API_BASE}/jobs/${jobId}`);
-  return response;
+  logAPI("매치 작업 상태 조회", { jobId });
+  try {
+    const response = await authFetch(`${API_BASE}/jobs/${jobId}`);
+    logAPI("매치 작업 상태 조회 성공", response);
+    return response;
+  } catch (error) {
+    logAPI("매치 작업 상태 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
  * 매치 상세 조회
  */
 export const getMatchById = async (matchId: string): Promise<MatchData> => {
-  const response = await authFetch(`${API_BASE}/${matchId}`);
-  return response;
+  logAPI("매치 상세 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}`);
+    logAPI("매치 상세 조회 성공", response);
+    return response;
+  } catch (error) {
+    logAPI("매치 상세 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
@@ -64,8 +100,15 @@ export const getMatchById = async (matchId: string): Promise<MatchData> => {
 export const getMatchEvents = async (
   matchId: string
 ): Promise<MatchEvent[]> => {
-  const response = await authFetch(`${API_BASE}/${matchId}/events`);
-  return response;
+  logAPI("매치 이벤트 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/events`);
+    logAPI("매치 이벤트 조회 성공", { matchId, count: response?.length });
+    return response;
+  } catch (error) {
+    logAPI("매치 이벤트 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
@@ -77,24 +120,48 @@ export const getMatchStatistics = async (
   home: MatchStatistics;
   away: MatchStatistics;
 }> => {
-  const response = await authFetch(`${API_BASE}/${matchId}/statistics`);
-  return response;
+  logAPI("매치 통계 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/statistics`);
+    logAPI("매치 통계 조회 성공", response);
+    return response;
+  } catch (error) {
+    logAPI("매치 통계 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
  * 매치 분석 조회
  */
 export const getMatchAnalysis = async (matchId: string): Promise<string> => {
-  const response = await authFetch(`${API_BASE}/${matchId}/analysis`);
-  return response;
+  logAPI("매치 분석 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/analysis`);
+    logAPI("매치 분석 조회 성공", {
+      matchId,
+      analysisLength: response?.length,
+    });
+    return response;
+  } catch (error) {
+    logAPI("매치 분석 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
  * 매치 로그 조회
  */
 export const getMatchLogs = async (matchId: string): Promise<any[]> => {
-  const response = await authFetch(`${API_BASE}/${matchId}/logs`);
-  return response;
+  logAPI("매치 로그 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/logs`);
+    logAPI("매치 로그 조회 성공", { matchId, count: response?.length });
+    return response;
+  } catch (error) {
+    logAPI("매치 로그 조회 실패", error);
+    throw error;
+  }
 };
 
 /**
@@ -103,9 +170,25 @@ export const getMatchLogs = async (matchId: string): Promise<any[]> => {
 export const getMatchStatus = async (
   matchId: string
 ): Promise<{
-  status: string;
+  status: MatchStatus;
   message: string;
 }> => {
-  const response = await authFetch(`${API_BASE}/${matchId}/status`);
-  return response;
+  logAPI("매치 상태 조회", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/status`);
+    logAPI("매치 상태 조회 성공", response);
+
+    // 유효성 검사 - status가 MatchStatus enum에 있는지 확인
+    if (!Object.values(MatchStatus).includes(response.status)) {
+      console.warn(`[Match API] 알 수 없는 매치 상태: ${response.status}`);
+    }
+
+    return {
+      status: response.status as MatchStatus,
+      message: response.message || "매치 상태 조회 성공",
+    };
+  } catch (error) {
+    logAPI("매치 상태 조회 실패", { matchId, error });
+    throw error;
+  }
 };

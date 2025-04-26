@@ -37,7 +37,8 @@ function App() {
                       element={<ProtectedRoute />}
                       Component={StrategyPage}
                     />
-                    <Route path="match/:id" element={<MatchPage />} />
+                    <Route path="match/:matchId" element={<MatchPage />} />
+                    <Route path="match/job/:jobId" element={<MatchPage />} />
                     <Route
                       path="*"
                       element={<div>페이지를 찾을 수 없습니다.</div>}

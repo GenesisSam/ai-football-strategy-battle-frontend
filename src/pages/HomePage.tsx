@@ -82,12 +82,49 @@ const QuickMatchButton = styled(ActionButton)`
   }
 `;
 
-const GameMatchButton = styled(ActionButton)`
-  background-color: ${({ theme }) => theme.colors.secondary};
+// 로딩 상태를 표시할 수 있는 버튼으로 개선
+const GameMatchButton = styled(ActionButton)<{ isLoading?: boolean }>`
+  background-color: ${({ theme, isLoading }) =>
+    isLoading ? theme.colors.neutral : theme.colors.secondary};
   color: white;
+  position: relative;
+  overflow: hidden;
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.primary};
+    background-color: ${({ theme, isLoading }) =>
+      isLoading ? theme.colors.neutral : theme.colors.primary};
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  /* 로딩 애니메이션 */
+  &::after {
+    content: "";
+    display: ${({ isLoading }) => (isLoading ? "block" : "none")};
+    position: absolute;
+    width: 30%;
+    height: 100%;
+    top: 0;
+    left: -30%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    animation: loading 1.5s infinite;
+  }
+
+  @keyframes loading {
+    0% {
+      left: -30%;
+    }
+    100% {
+      left: 130%;
+    }
   }
 `;
 
@@ -126,6 +163,7 @@ const HomePage: React.FC = () => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [startingMatch, setStartingMatch] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [loadingSquadId, setLoadingSquadId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -166,33 +204,21 @@ const HomePage: React.FC = () => {
     [navigate]
   );
 
-  // 빠른 대전 시작
-  const handleQuickMatchClick = useCallback(
-    async (squadId: string) => {
-      try {
-        setStartingMatch(true);
-        activateExistingSquad(squadId);
-        const matchId = await startQuickMatch(squadId);
-        if (matchId) {
-          navigate(`/match/${matchId}`);
-        }
-      } catch (error) {
-        console.error("빠른 대전 시작 실패:", error);
-      } finally {
-        setStartingMatch(false);
-      }
-    },
-    [startQuickMatch, navigate, activateExistingSquad]
-  );
-
   // 게임 대전 시작
   const handleGameMatchClick = useCallback(
     async (squadId: string) => {
       try {
         setStartingMatch(true);
-        activateExistingSquad(squadId);
+        setLoadingSquadId(squadId); // 로딩 중인 스쿼드 ID 저장
+
+        // 선택한 스쿼드를 활성화
+        await activateExistingSquad(squadId);
+
+        // 게임 대전 시작 - 서버에 전략 전달
         const jobId = await startGameMatch(squadId);
+
         if (jobId) {
+          // 작업 ID 저장 및 매치 페이지로 이동
           setActiveJobId(jobId);
           navigate(`/match/job/${jobId}`);
         }
@@ -200,6 +226,7 @@ const HomePage: React.FC = () => {
         console.error("게임 대전 시작 실패:", error);
       } finally {
         setStartingMatch(false);
+        setLoadingSquadId(null); // 로딩 상태 초기화
       }
     },
     [startGameMatch, navigate, activateExistingSquad]
@@ -257,24 +284,21 @@ const HomePage: React.FC = () => {
                           e.stopPropagation();
                           handleEditClick(squad._id);
                         }}
+                        disabled={Boolean(loadingSquadId)}
                       >
                         수정
                       </EditButton>
-                      <QuickMatchButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickMatchClick(squad._id);
-                        }}
-                      >
-                        빠른 대전
-                      </QuickMatchButton>
                       <GameMatchButton
                         onClick={(e) => {
                           e.stopPropagation();
                           handleGameMatchClick(squad._id);
                         }}
+                        disabled={Boolean(loadingSquadId)}
+                        isLoading={loadingSquadId === squad._id}
                       >
-                        게임 대전
+                        {loadingSquadId === squad._id
+                          ? "준비 중..."
+                          : "게임 대전"}
                       </GameMatchButton>
                     </StrategyActions>
                   )}
@@ -292,6 +316,7 @@ const HomePage: React.FC = () => {
                 width: "100%",
                 backgroundColor: "#A020F0",
               }}
+              disabled={Boolean(loadingSquadId)}
             >
               새 전략 만들기
             </Button>
