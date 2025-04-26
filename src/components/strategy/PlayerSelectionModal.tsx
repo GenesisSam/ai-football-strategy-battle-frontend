@@ -102,10 +102,10 @@ const SearchInput = styled.input`
 `;
 
 // 검색 모드 토글 버튼
-const SearchModeToggle = styled.button<{ isActive: boolean }>`
-  background-color: ${({ isActive, theme }) =>
-    isActive ? theme.colors.primary : theme.colors.light};
-  color: ${({ isActive, theme }) => (isActive ? "white" : theme.colors.dark)};
+const SearchModeToggle = styled.button<{ $isActive: boolean }>`
+  background-color: ${({ $isActive, theme }) =>
+    $isActive ? theme.colors.primary : theme.colors.light};
+  color: ${({ $isActive, theme }) => ($isActive ? "white" : theme.colors.dark)};
   border: 1px solid ${({ theme }) => theme.colors.neutral};
   border-radius: 4px;
   padding: 8px 12px;
@@ -114,8 +114,8 @@ const SearchModeToggle = styled.button<{ isActive: boolean }>`
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: ${({ isActive, theme }) =>
-      isActive ? theme.colors.primary : theme.colors.light};
+    background-color: ${({ $isActive, theme }) =>
+      $isActive ? theme.colors.primary : theme.colors.light};
     opacity: 0.9;
   }
 `;
@@ -588,7 +588,7 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
         </ModalHeader>
 
         <SearchModeToggle
-          isActive={isDetailedSearch}
+          $isActive={isDetailedSearch}
           onClick={toggleSearchMode}
         >
           {isDetailedSearch ? "기본 검색으로 전환" : "상세 검색으로 전환"}

@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Socket } from "socket.io-client";
 import { createSocketConnection, subscribeToMatch } from "../api/socket";
+import debounce from "lodash/debounce";
+
+let SOCKET_INIT_STATE = false;
 
 /**
  * 매치 웹소켓 연결을 관리하는 훅
@@ -18,12 +21,42 @@ export function useSocket(matchId?: string) {
   const reconnectIntervalRef = useRef<number | null>(null);
 
   // 로그 헬퍼 함수
-  const log = useCallback((message: string, data?: any) => {
+  const log = useCallback((message: string, data?: unknown) => {
     console.log(`[useSocket] ${message}`, data || "");
   }, []);
 
+  // 수동 재연결 시작
+  const startReconnecting = useCallback(() => {
+    if (reconnectIntervalRef.current) {
+      clearInterval(reconnectIntervalRef.current);
+    }
+
+    reconnectIntervalRef.current = setInterval(() => {
+      // 최대 시도 횟수 초과시 중단
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        if (reconnectIntervalRef.current) {
+          clearInterval(reconnectIntervalRef.current);
+          reconnectIntervalRef.current = null;
+        }
+        setError(
+          "최대 재연결 시도 횟수를 초과했습니다. 페이지를 새로고침 해주세요."
+        );
+        log("최대 재연결 시도 횟수 초과");
+        return;
+      }
+
+      if (!isConnected && socketRef.current) {
+        reconnectAttemptsRef.current++;
+        log(
+          `재연결 시도 중... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
+        );
+        socketRef.current.connect();
+      }
+    }, 2000); // 2초마다 재연결 시도
+  }, [isConnected, log]);
+
   // 소켓 연결 함수
-  const connect = useCallback(() => {
+  const connectImpl = useCallback(() => {
     try {
       // 기존 재연결 인터벌이 있다면 정리
       if (reconnectIntervalRef.current) {
@@ -81,37 +114,16 @@ export function useSocket(matchId?: string) {
       setIsConnected(false);
       return null;
     }
-  }, [matchId, log]);
+  }, [matchId, log, startReconnecting]);
 
-  // 수동 재연결 시작
-  const startReconnecting = useCallback(() => {
-    if (reconnectIntervalRef.current) {
-      clearInterval(reconnectIntervalRef.current);
-    }
-
-    reconnectIntervalRef.current = setInterval(() => {
-      // 최대 시도 횟수 초과시 중단
-      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-        if (reconnectIntervalRef.current) {
-          clearInterval(reconnectIntervalRef.current);
-          reconnectIntervalRef.current = null;
-        }
-        setError(
-          "최대 재연결 시도 횟수를 초과했습니다. 페이지를 새로고침 해주세요."
-        );
-        log("최대 재연결 시도 횟수 초과");
-        return;
-      }
-
-      if (!isConnected && socketRef.current) {
-        reconnectAttemptsRef.current++;
-        log(
-          `재연결 시도 중... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-        );
-        socketRef.current.connect();
-      }
-    }, 2000); // 2초마다 재연결 시도
-  }, [isConnected, log]);
+  // lodash의 debounce를 사용하여 300ms 지연을 적용한 connect 함수
+  const connect = useMemo(
+    () =>
+      debounce(() => {
+        connectImpl();
+      }, 300),
+    [connectImpl]
+  );
 
   // 소켓 연결 해제 함수
   const disconnect = useCallback(() => {
@@ -129,14 +141,14 @@ export function useSocket(matchId?: string) {
     setIsConnected(false);
   }, [log]);
 
-  // 컴포넌트 마운트/언마운트 처리
   useEffect(() => {
-    connect();
-
-    return () => {
-      disconnect();
-    };
-  }, [connect, disconnect]);
+    if (!socketRef.current && !SOCKET_INIT_STATE) {
+      log("소켓 연결 시도");
+      connect.cancel();
+      SOCKET_INIT_STATE = true; // 초기화 완료 플래그 설정
+      connect(); // 초기 연결은 debounce 없이 직접 호출
+    }
+  }, [connect, log]);
 
   return {
     socket: socketRef.current,

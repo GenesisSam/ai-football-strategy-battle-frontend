@@ -1,4 +1,11 @@
-import React, { createContext, useState, useContext, ReactNode } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  ReactNode,
+  useCallback,
+  useMemo,
+} from "react";
 import * as matchApi from "../api/match";
 import { MatchData } from "../types/global";
 
@@ -31,98 +38,113 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   // 에러 초기화 함수
-  const clearError = () => {
+  const clearError = useCallback(() => {
     logMatch("에러 초기화");
     setError(null);
-  };
+  }, []);
 
   // 빠른 매치 시작 함수
-  const startQuickMatch = async (
-    squadId: string
-  ): Promise<MatchData | null> => {
-    logMatch("빠른 매치 시작", { squadId });
-    try {
-      setIsLoading(true);
-      setError(null);
+  const startQuickMatch = useCallback(
+    async (squadId: string): Promise<MatchData | null> => {
+      logMatch("빠른 매치 시작", { squadId });
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      const match = await matchApi.createQuickMatch(squadId);
-      logMatch("빠른 매치 생성 완료", { matchId: match.id });
-      return match;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "빠른 매치를 시작하는 중 오류가 발생했습니다.";
-      logMatch("빠른 매치 시작 오류", { error: errorMessage });
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        const match = await matchApi.createQuickMatch(squadId);
+        logMatch("빠른 매치 생성 완료", { matchId: match.id });
+        return match;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "빠른 매치를 시작하는 중 오류가 발생했습니다.";
+        logMatch("빠른 매치 시작 오류", { error: errorMessage });
+        setError(errorMessage);
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   // 게임 대전 시작 (비동기)
-  const startGameMatch = async (squadId: string): Promise<string | null> => {
-    logMatch("게임 매치 시작", { squadId });
-    try {
-      setIsLoading(true);
-      setError(null);
+  const startGameMatch = useCallback(
+    async (squadId: string): Promise<string | null> => {
+      logMatch("게임 매치 시작", { squadId });
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      const { jobId } = await matchApi.createGameMatch(squadId);
-      logMatch("게임 매치 작업 생성 완료", { jobId });
-      return jobId;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "게임 매치를 시작하는 중 오류가 발생했습니다.";
-      logMatch("게임 매치 시작 오류", { error: errorMessage });
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        const { jobId } = await matchApi.createGameMatch(squadId);
+        logMatch("게임 매치 작업 생성 완료", { jobId });
+        return jobId;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "게임 매치를 시작하는 중 오류가 발생했습니다.";
+        logMatch("게임 매치 시작 오류", { error: errorMessage });
+        setError(errorMessage);
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   // 매치 상세 정보 조회
-  const getMatchDetails = async (
-    matchId: string
-  ): Promise<MatchData | null> => {
-    logMatch("매치 상세 정보 조회", { matchId });
-    try {
-      setIsLoading(true);
-      setError(null);
+  const getMatchDetails = useCallback(
+    async (matchId: string): Promise<MatchData | null> => {
+      logMatch("매치 상세 정보 조회", { matchId });
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      const match = await matchApi.getMatchById(matchId);
-      logMatch("매치 상세 정보 조회 성공", {
-        matchId,
-        status: match.status,
-        homeScore: match.result?.homeScore,
-        awayScore: match.result?.awayScore,
-      });
-      return match;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "매치 정보를 불러오는 중 오류가 발생했습니다.";
-      logMatch("매치 상세 정보 조회 오류", { matchId, error: errorMessage });
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        const match = await matchApi.getMatchById(matchId);
+        logMatch("매치 상세 정보 조회 성공", {
+          matchId,
+          status: match.status,
+          homeScore: match.result?.homeScore,
+          awayScore: match.result?.awayScore,
+        });
+        return match;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "매치 정보를 불러오는 중 오류가 발생했습니다.";
+        logMatch("매치 상세 정보 조회 오류", { matchId, error: errorMessage });
+        setError(errorMessage);
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
-  // 컨텍스트 값
-  const value = {
-    isLoading,
-    error,
-    startQuickMatch,
-    startGameMatch,
-    getMatchDetails,
-    clearError,
-  };
+  // 컨텍스트 값 메모이제이션
+  const value = useMemo(
+    () => ({
+      isLoading,
+      error,
+      startQuickMatch,
+      startGameMatch,
+      getMatchDetails,
+      clearError,
+    }),
+    [
+      isLoading,
+      error,
+      startQuickMatch,
+      startGameMatch,
+      getMatchDetails,
+      clearError,
+    ]
+  );
 
   return (
     <MatchContext.Provider value={value}>{children}</MatchContext.Provider>

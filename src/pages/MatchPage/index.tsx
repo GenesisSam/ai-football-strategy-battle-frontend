@@ -120,6 +120,17 @@ const MatchPage: React.FC = () => {
   useEffect(() => {
     if (!socket || !matchId) return;
 
+    // 이벤트 핸들러 정리
+    const cleanupListeners = () => {
+      logMatchPage("웹소켓 이벤트 리스너 정리");
+      socket.off("match:statusUpdate");
+      socket.off("match:event");
+      socket.off("match:end");
+    };
+
+    // 기존 리스너 제거로 중복 등록 방지
+    cleanupListeners();
+
     // 매치 상태 변경 이벤트 핸들러
     const handleStatusChange = (data: any) => {
       if (data.matchId === matchId) {
@@ -142,15 +153,25 @@ const MatchPage: React.FC = () => {
       }
     };
 
-    // 이벤트 리스너 등록
-    socket.on("match_status_change", handleStatusChange);
-    socket.on("match_event", handleMatchEvent);
+    // 매치 종료 이벤트 핸들러
+    const handleMatchEnd = (data: any) => {
+      if (data.matchId === matchId) {
+        logMatchPage("웹소켓으로 매치 종료 이벤트 수신", data);
+        loadMatchDetails();
+        stopPolling();
+      }
+    };
+
+    // 올바른 이벤트 이름으로 리스너 등록
+    socket.on("match:statusUpdate", handleStatusChange);
+    socket.on("match:event", handleMatchEvent);
+    socket.on("match:end", handleMatchEnd);
+
+    // 매치 구독 요청
+    socket.emit("match:join", { matchId });
 
     // 정리 함수
-    return () => {
-      socket.off("match_status_change", handleStatusChange);
-      socket.off("match_event", handleMatchEvent);
-    };
+    return cleanupListeners;
   }, [socket, matchId, loadMatchDetails, stopPolling]);
 
   // 매치 진행 상태 폴링 함수 개선 - 웹소켓이 연결되지 않은 경우에만 폴링

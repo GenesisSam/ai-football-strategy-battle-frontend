@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import SplashScreen from "../components/SplashScreen";
@@ -73,26 +73,17 @@ const EditButton = styled(ActionButton)`
   }
 `;
 
-const QuickMatchButton = styled(ActionButton)`
-  background-color: ${({ theme }) => theme.colors.success};
-  color: white;
-
-  &:hover {
-    background-color: ${({ theme }) => theme.colors.primary};
-  }
-`;
-
 // 로딩 상태를 표시할 수 있는 버튼으로 개선
-const GameMatchButton = styled(ActionButton)<{ isLoading?: boolean }>`
-  background-color: ${({ theme, isLoading }) =>
-    isLoading ? theme.colors.neutral : theme.colors.secondary};
+const GameMatchButton = styled(ActionButton)<{ $isLoading?: boolean }>`
+  background-color: ${({ theme, $isLoading }) =>
+    $isLoading ? theme.colors.neutral : theme.colors.secondary};
   color: white;
   position: relative;
   overflow: hidden;
 
   &:hover {
-    background-color: ${({ theme, isLoading }) =>
-      isLoading ? theme.colors.neutral : theme.colors.primary};
+    background-color: ${({ theme, $isLoading }) =>
+      $isLoading ? theme.colors.neutral : theme.colors.primary};
   }
 
   &:disabled {
@@ -103,7 +94,7 @@ const GameMatchButton = styled(ActionButton)<{ isLoading?: boolean }>`
   /* 로딩 애니메이션 */
   &::after {
     content: "";
-    display: ${({ isLoading }) => (isLoading ? "block" : "none")};
+    display: ${({ $isLoading }) => ($isLoading ? "block" : "none")};
     position: absolute;
     width: 30%;
     height: 100%;
@@ -158,7 +149,80 @@ const LoadingOverlay = styled.div`
   z-index: 1000;
 `;
 
-const HomePage: React.FC = () => {
+interface StrategyItemProps {
+  squad: {
+    _id: string;
+    name: string;
+    formation: string;
+    isActive: boolean;
+  };
+  isExpanded: boolean;
+  loadingSquadId: string | null;
+  onItemClick: (id: string) => void;
+  onEditClick: (id: string) => void;
+  onGameMatchClick: (id: string) => void;
+}
+
+const MemoizedStrategyItem = memo(
+  ({
+    squad,
+    isExpanded,
+    loadingSquadId,
+    onItemClick,
+    onEditClick,
+    onGameMatchClick,
+  }: StrategyItemProps) => {
+    const handleItemClick = useCallback(() => {
+      onItemClick(squad._id);
+    }, [onItemClick, squad._id]);
+
+    const handleEditClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onEditClick(squad._id);
+      },
+      [onEditClick, squad._id]
+    );
+
+    const handleGameMatchClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onGameMatchClick(squad._id);
+      },
+      [onGameMatchClick, squad._id]
+    );
+
+    const isLoading = loadingSquadId === squad._id;
+
+    return (
+      <StrategyItem onClick={handleItemClick}>
+        <StrategyName>{squad.name}</StrategyName>
+        <StrategyDescription>
+          {squad.formation} {squad.isActive && "(활성화됨)"}
+        </StrategyDescription>
+        {isExpanded && (
+          <StrategyActions>
+            <EditButton
+              onClick={handleEditClick}
+              disabled={Boolean(loadingSquadId)}
+            >
+              수정
+            </EditButton>
+            <GameMatchButton
+              onClick={handleGameMatchClick}
+              disabled={Boolean(loadingSquadId)}
+              $isLoading={isLoading}
+            >
+              {isLoading ? "준비 중..." : "게임 대전"}
+            </GameMatchButton>
+          </StrategyActions>
+        )}
+      </StrategyItem>
+    );
+  }
+);
+
+const HomePage: React.FC = memo(() => {
   const [showSplash, setShowSplash] = useState(true);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [startingMatch, setStartingMatch] = useState(false);
@@ -186,16 +250,9 @@ const HomePage: React.FC = () => {
     setShowSplash(false);
   }, []);
 
-  const handleItemClick = useCallback(
-    (strategyId: string) => {
-      if (expandedItemId === strategyId) {
-        setExpandedItemId(null);
-      } else {
-        setExpandedItemId(strategyId);
-      }
-    },
-    [expandedItemId]
-  );
+  const handleItemClick = useCallback((strategyId: string) => {
+    setExpandedItemId((prevId) => (prevId === strategyId ? null : strategyId));
+  }, []);
 
   const handleEditClick = useCallback(
     (squadId: string) => {
@@ -232,8 +289,8 @@ const HomePage: React.FC = () => {
     [startGameMatch, navigate, activateExistingSquad]
   );
 
-  if (isAuthLoading || (isAuthenticated && isSquadLoading)) {
-    return (
+  const loadingComponent = useMemo(
+    () => (
       <div
         style={{
           display: "flex",
@@ -244,7 +301,12 @@ const HomePage: React.FC = () => {
       >
         <AIStyleLoader />
       </div>
-    );
+    ),
+    []
+  );
+
+  if (isAuthLoading || (isAuthenticated && isSquadLoading)) {
+    return loadingComponent;
   }
 
   // 활성 작업이 있으면 해당 작업 페이지로 바로 이동
@@ -269,40 +331,15 @@ const HomePage: React.FC = () => {
             <h2>나의 전략 목록</h2>
             {squads.length > 0 ? (
               squads.map((squad) => (
-                <StrategyItem
+                <MemoizedStrategyItem
                   key={squad._id}
-                  onClick={() => handleItemClick(squad._id)}
-                >
-                  <StrategyName>{squad.name}</StrategyName>
-                  <StrategyDescription>
-                    {squad.formation} {squad.isActive && "(활성화됨)"}
-                  </StrategyDescription>
-                  {expandedItemId === squad._id && (
-                    <StrategyActions>
-                      <EditButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClick(squad._id);
-                        }}
-                        disabled={Boolean(loadingSquadId)}
-                      >
-                        수정
-                      </EditButton>
-                      <GameMatchButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleGameMatchClick(squad._id);
-                        }}
-                        disabled={Boolean(loadingSquadId)}
-                        isLoading={loadingSquadId === squad._id}
-                      >
-                        {loadingSquadId === squad._id
-                          ? "준비 중..."
-                          : "게임 대전"}
-                      </GameMatchButton>
-                    </StrategyActions>
-                  )}
-                </StrategyItem>
+                  squad={squad}
+                  isExpanded={expandedItemId === squad._id}
+                  loadingSquadId={loadingSquadId}
+                  onItemClick={handleItemClick}
+                  onEditClick={handleEditClick}
+                  onGameMatchClick={handleGameMatchClick}
+                />
               ))
             ) : (
               <EmptyMessage>
@@ -332,6 +369,6 @@ const HomePage: React.FC = () => {
       </HomeContainer>
     </>
   );
-};
+});
 
 export default HomePage;

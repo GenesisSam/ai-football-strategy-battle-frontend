@@ -6,6 +6,7 @@ import React, {
   ReactNode,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import { User, register, getProfile, login } from "../api/auth";
 import axios, { AxiosError } from "axios";
@@ -67,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     },
-    [setUser] // setUser가 의존성으로 추가되어야 함
+    [setUser]
   );
 
   // 앱 초기화 시 사용자 정보 복원
@@ -121,14 +122,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, [getGameProfileWithAutoSign]); // getGameProfileWithAutoSign 의존성 추가
 
-  const authValue = {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    moimUser,
-  };
+  // useMemo로 컨텍스트 값 메모이제이션
+  const authValue = useMemo(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      moimUser,
+    }),
+    [user, isLoading, moimUser]
+  );
 
-  // useMemo로 컨텍스트 값 최적화
   return (
     <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
   );

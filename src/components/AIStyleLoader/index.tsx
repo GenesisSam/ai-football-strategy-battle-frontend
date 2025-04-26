@@ -19,9 +19,22 @@ import {
 } from "./styled";
 
 // 로그 헬퍼 함수
-const logLoader = (action: string, data?: any) => {
-  console.log(`[AIStyleLoader] ${action}`, data || "");
-};
+const logLoader = (() => {
+  // 로그 중복 방지를 위한 마지막 로그 시간 기록
+  const logTimestamps = new Map();
+
+  return (action: string, data?: any) => {
+    const now = Date.now();
+    const key = `${action}-${JSON.stringify(data || "")}`;
+    const lastLogTime = logTimestamps.get(key) || 0;
+
+    // 같은 로그가 100ms 내에 다시 출력되는 것을 방지
+    if (now - lastLogTime < 100) return;
+
+    logTimestamps.set(key, now);
+    console.log(`[AIStyleLoader] ${action}`, data || "");
+  };
+})();
 
 // 각 매치 상태에 따른 메시지 매핑
 const STATUS_MESSAGES = {
@@ -459,11 +472,11 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
     const sock = socket.socket;
     if (!sock) return;
 
-    console.log("소켓 이벤트 리스너 등록");
+    logLoader("소켓 이벤트 리스너 등록");
 
     // 이벤트 등록 전 이전 이벤트 구독 해제
     const cleanupEvents = () => {
-      console.log("소켓 이벤트 리스너 정리");
+      logLoader("소켓 이벤트 리스너 정리");
       sock.off("match:jobStatus");
       sock.off("match:jobCompleted");
       sock.off("match:statusUpdate");
@@ -481,10 +494,13 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
       }
     };
 
+    // 기존 리스너 정리 (중복 등록 방지)
+    cleanupEvents();
+
     // 작업 ID가 있으면 작업 업데이트 구독
     if (jobId) {
       // 작업 구독
-      console.log(`작업 구독: ${jobId}`);
+      logLoader(`작업 구독: ${jobId}`);
       sock.emit("match:subscribeJob", { jobId });
       sock.on("match:jobStatus", handleJobStatus);
       sock.on("match:jobCompleted", handleJobStatus);
@@ -493,34 +509,15 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
     // 매치 ID가 있으면 매치 업데이트 구독
     if (matchId) {
       // 매치 구독
-      console.log(`매치 구독: ${matchId}`);
+      logLoader(`매치 구독: ${matchId}`);
       sock.emit("match:join", { matchId });
 
       // 상태 업데이트 이벤트 리스너
-      sock.on("match:statusUpdate", (data) => {
-        console.log("match:statusUpdate 이벤트 수신:", data);
-        handleStatusUpdate(data);
-      });
-
-      sock.on("match:log", (data) => {
-        console.log("match:log 이벤트 수신:", data);
-        handleLogUpdate(data);
-      });
-
-      sock.on("match:allLogs", (data) => {
-        console.log("match:allLogs 이벤트 수신:", data);
-        handleAllLogs(data);
-      });
-
-      sock.on("match:scoreUpdate", (data) => {
-        console.log("match:scoreUpdate 이벤트 수신:", data);
-        handleScoreUpdate(data);
-      });
-
-      sock.on("match:end", (data) => {
-        console.log("match:end 이벤트 수신:", data);
-        handleMatchEnd(data);
-      });
+      sock.on("match:statusUpdate", handleStatusUpdate);
+      sock.on("match:log", handleLogUpdate);
+      sock.on("match:allLogs", handleAllLogs);
+      sock.on("match:scoreUpdate", handleScoreUpdate);
+      sock.on("match:end", handleMatchEnd);
 
       // 서버에 현재 상태 요청
       sock.emit("match:requestStatus", { matchId });

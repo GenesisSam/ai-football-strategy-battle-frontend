@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
 
 // 축구장 전략판 애니메이션 스타일 컴포넌트
-const SplashContainer = styled.div<{ isVisible: boolean }>`
+const SplashContainer = styled.div<{ $isVisible: boolean }>`
   position: fixed;
   top: 0;
   left: 0;
@@ -15,8 +15,8 @@ const SplashContainer = styled.div<{ isVisible: boolean }>`
   align-items: center;
   z-index: 1000;
   transition: opacity 0.5s ease-in-out;
-  opacity: ${(props) => (props.isVisible ? 1 : 0)};
-  pointer-events: ${(props) => (props.isVisible ? "all" : "none")};
+  opacity: ${(props) => (props.$isVisible ? 1 : 0)};
+  pointer-events: ${(props) => (props.$isVisible ? "all" : "none")};
 `;
 
 const fadeIn = keyframes`
@@ -269,7 +269,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
   };
 
   return (
-    <SplashContainer isVisible={isVisible}>
+    <SplashContainer $isVisible={isVisible}>
       <SplashTitle>AI 축구 전략 배틀</SplashTitle>
       <FootballField>
         <CenterCircle />
