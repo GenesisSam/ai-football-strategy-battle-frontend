@@ -25,6 +25,23 @@ export interface EPLPlayer {
   };
 }
 
+// 능력치 기반 검색을 위한 필터 인터페이스
+export interface PlayerAttributesFilter {
+  minPace?: number;
+  maxPace?: number;
+  minShooting?: number;
+  maxShooting?: number;
+  minPassing?: number;
+  maxPassing?: number;
+  minDribbling?: number;
+  maxDribbling?: number;
+  minDefending?: number;
+  maxDefending?: number;
+  minPhysical?: number;
+  maxPhysical?: number;
+  position?: string;
+}
+
 // 포지션 축약어와 풀네임 매핑
 const positionMapping: Record<string, string> = {
   GK: "Goalkeeper",
@@ -93,6 +110,19 @@ export const searchPlayers = async (query: string): Promise<EPLPlayer[]> => {
   const response = await apiClient.get<EPLPlayer[]>(`/epl-players/search`, {
     params: { query: searchQuery },
   });
+  return response.data;
+};
+
+// 능력치 기반 선수 검색
+export const searchPlayersByAttributes = async (
+  filters: PlayerAttributesFilter
+): Promise<EPLPlayer[]> => {
+  const response = await apiClient.get<EPLPlayer[]>(
+    "/epl-players/advanced-search",
+    {
+      params: filters,
+    }
+  );
   return response.data;
 };
 
