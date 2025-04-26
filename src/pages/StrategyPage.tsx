@@ -190,14 +190,13 @@ const StrategyPage: React.FC = () => {
 
           setPlayers(playersWithPositions);
 
-          // 전략 정보 파싱 (문자열에서 필요한 정보 추출)
-          const strategyLines = squad.strategy.split("\n");
-          if (strategyLines.length >= 3) {
-            setAttackStyle(strategyLines[0]);
-            setDefenseStyle(strategyLines[1]);
-            setSpecialInstructions(strategyLines.slice(2).join("\n"));
-          } else {
-            setSpecialInstructions(squad.strategy);
+          // 전략 정보 로드 (객체에서 값 가져오기)
+          if (squad.strategy) {
+            setAttackStyle(squad.strategy.attackStyle || "");
+            setDefenseStyle(squad.strategy.defenseStyle || "");
+            setSpecialInstructions(
+              squad.strategy.specialDirectingInstrument || ""
+            );
           }
 
           // 기존 스쿼드 조회 시에는 기본적으로 편집 모드가 아님

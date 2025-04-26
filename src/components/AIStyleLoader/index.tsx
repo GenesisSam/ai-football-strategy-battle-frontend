@@ -1,111 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import styled from "styled-components";
+
 import { useSocket } from "../../hooks/useSocket";
 import { MatchStatus } from "../../types/global.d";
 import { getMatchStatus, getMatchById } from "../../api/match";
+import {
+  LoaderContainer,
+  LoadingText,
+  StatusMessage,
+  ScoreDisplay,
+  TeamName,
+  Score,
+  LoadingBar,
+  LoadingProgress,
+  LogsContainer,
+  LogEntry,
+  LogTime,
+  LogMessage,
+} from "./styled";
 
 // 로그 헬퍼 함수
 const logLoader = (action: string, data?: any) => {
   console.log(`[AIStyleLoader] ${action}`, data || "");
 };
-
-const LoaderContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100vh;
-  background-color: ${({ theme }) => theme.colors.background};
-  z-index: 100;
-`;
-
-const LoadingText = styled.h2`
-  font-size: 1.8rem;
-  color: ${({ theme }) => theme.colors.primary};
-  margin-bottom: 2rem;
-  text-align: center;
-`;
-
-const StatusMessage = styled.p`
-  font-size: 1.2rem;
-  color: ${({ theme }) => theme.colors.secondary};
-  margin-bottom: 1rem;
-  max-width: 600px;
-  text-align: center;
-`;
-
-const ScoreDisplay = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 2rem 0;
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: ${({ theme }) => theme.colors.primary};
-`;
-
-const TeamName = styled.span`
-  padding: 0 1.5rem;
-`;
-
-const Score = styled.span`
-  padding: 0.5rem 1.5rem;
-  border-radius: 8px;
-  background-color: ${({ theme }) => theme.colors.secondary};
-  color: white;
-  margin: 0 1rem;
-`;
-
-const LoadingBar = styled.div`
-  width: 300px;
-  height: 10px;
-  background-color: ${({ theme }) => theme.colors.light};
-  border-radius: 5px;
-  overflow: hidden;
-  margin-bottom: 1rem;
-`;
-
-const LoadingProgress = styled.div<{ width: number }>`
-  height: 100%;
-  width: ${({ width }) => width}%;
-  background-color: ${({ theme }) => theme.colors.primary};
-  border-radius: 5px;
-  transition: width 0.3s ease-in-out;
-`;
-
-const LogsContainer = styled.div`
-  width: 80%;
-  max-width: 800px;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 1rem;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  margin-top: 2rem;
-`;
-
-const LogEntry = styled.div`
-  padding: 0.5rem;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.light};
-  display: flex;
-  align-items: flex-start;
-
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const LogTime = styled.span`
-  color: ${({ theme }) => theme.colors.secondary};
-  margin-right: 1rem;
-  font-weight: bold;
-  min-width: 50px;
-`;
-
-const LogMessage = styled.span`
-  color: ${({ theme }) => theme.colors.text};
-`;
 
 // 각 매치 상태에 따른 메시지 매핑
 const STATUS_MESSAGES = {
@@ -468,86 +384,100 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
 
   // 소켓 연결 상태 검사 및 재연결
   useEffect(() => {
-    if (!socket) {
+    // 타이머 관리를 위한 변수
+    let connectionTimeout: ReturnType<typeof setTimeout> | null = null;
+    const sock = socket.socket;
+    if (!sock) {
       logLoader("소켓 연결 없음", { matchId });
       // 소켓이 없으면 폴링 모드로 전환
       if (matchId) {
         startPollingFallback();
       }
-      return;
+      return () => {
+        // 폴링 모드에서 필요한 정리 작업은 startPollingFallback 함수 내에서 처리됨
+      };
     }
 
     // 소켓 상태 확인
-    logLoader("소켓 연결 상태", { connected: socket.connected, matchId });
-
-    // 연결이 끊어졌을 때 처리
-    if (!socket.connected) {
-      logLoader("소켓 연결 시도", { matchId });
-      socket.connect(); // 소켓 연결 시도
-
-      // 연결 시도 후 5초 내에 연결이 안되면 폴링으로 전환
-      const timeout = setTimeout(() => {
-        if (!socket.connected && matchId) {
-          logLoader("소켓 연결 시간 초과", { matchId });
-          startPollingFallback();
-        }
-      }, 5000);
-
-      return () => {
-        logLoader("소켓 연결 타임아웃 정리");
-        clearTimeout(timeout);
-      };
-    }
+    logLoader("소켓 연결 상태", { connected: socket.isConnected, matchId });
 
     // 소켓 연결/재연결 이벤트 리스너
     const handleConnect = () => {
       logLoader("소켓 연결됨");
 
+      // 타임아웃이 설정되어 있으면 정리
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+      }
+
       // 연결 후 필요한 구독 갱신
       if (matchId) {
         logLoader("매치 구독", { matchId });
-        socket.emit("match:join", { matchId });
+        sock.emit("match:join", { matchId });
       }
 
       if (jobId) {
         logLoader("작업 구독", { jobId });
-        socket.emit("match:subscribeJob", { jobId });
+        sock.emit("match:subscribeJob", { jobId });
       }
     };
 
-    socket.on("connect", handleConnect);
-    socket.on("reconnect", handleConnect);
+    // 이벤트 리스너 등록
+    sock.on("connect", handleConnect);
+    sock.on("reconnect", handleConnect);
 
+    // 연결이 끊어졌을 때 처리
+    if (!socket.isConnected) {
+      logLoader("소켓 연결 시도", { matchId });
+      socket.reconnect(); // 소켓 연결 시도
+
+      // 연결 시도 후 5초 내에 연결이 안되면 폴링으로 전환
+      connectionTimeout = setTimeout(() => {
+        logLoader("소켓 연결 시간 초과", { matchId });
+        if (matchId && !socket.isConnected) {
+          startPollingFallback();
+        }
+      }, 5000);
+    }
+
+    // 컴포넌트 언마운트 또는 의존성 변경 시 모든 정리 작업 수행
     return () => {
-      logLoader("소켓 이벤트 리스너 정리");
-      socket.off("connect", handleConnect);
-      socket.off("reconnect", handleConnect);
+      logLoader("소켓 이벤트 리스너 및 타이머 정리");
+      sock.off("connect", handleConnect);
+      sock.off("reconnect", handleConnect);
+
+      // 타이머가 설정되어 있으면 정리
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+      }
     };
   }, [socket, matchId, jobId, startPollingFallback]);
 
   // 소켓 이벤트 구독 설정
   useEffect(() => {
-    if (!socket) return;
+    const sock = socket.socket;
+    if (!sock) return;
 
     console.log("소켓 이벤트 리스너 등록");
 
     // 이벤트 등록 전 이전 이벤트 구독 해제
     const cleanupEvents = () => {
       console.log("소켓 이벤트 리스너 정리");
-      socket.off("match:jobStatus");
-      socket.off("match:jobCompleted");
-      socket.off("match:statusUpdate");
-      socket.off("match:log");
-      socket.off("match:allLogs");
-      socket.off("match:scoreUpdate");
-      socket.off("match:end");
+      sock.off("match:jobStatus");
+      sock.off("match:jobCompleted");
+      sock.off("match:statusUpdate");
+      sock.off("match:log");
+      sock.off("match:allLogs");
+      sock.off("match:scoreUpdate");
+      sock.off("match:end");
 
       // 구독 해제
       if (jobId) {
-        socket.emit("match:unsubscribeJob", { jobId });
+        sock.emit("match:unsubscribeJob", { jobId });
       }
       if (matchId) {
-        socket.emit("match:leave", { matchId });
+        sock.emit("match:leave", { matchId });
       }
     };
 
@@ -555,45 +485,45 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
     if (jobId) {
       // 작업 구독
       console.log(`작업 구독: ${jobId}`);
-      socket.emit("match:subscribeJob", { jobId });
-      socket.on("match:jobStatus", handleJobStatus);
-      socket.on("match:jobCompleted", handleJobStatus);
+      sock.emit("match:subscribeJob", { jobId });
+      sock.on("match:jobStatus", handleJobStatus);
+      sock.on("match:jobCompleted", handleJobStatus);
     }
 
     // 매치 ID가 있으면 매치 업데이트 구독
     if (matchId) {
       // 매치 구독
       console.log(`매치 구독: ${matchId}`);
-      socket.emit("match:join", { matchId });
+      sock.emit("match:join", { matchId });
 
       // 상태 업데이트 이벤트 리스너
-      socket.on("match:statusUpdate", (data) => {
+      sock.on("match:statusUpdate", (data) => {
         console.log("match:statusUpdate 이벤트 수신:", data);
         handleStatusUpdate(data);
       });
 
-      socket.on("match:log", (data) => {
+      sock.on("match:log", (data) => {
         console.log("match:log 이벤트 수신:", data);
         handleLogUpdate(data);
       });
 
-      socket.on("match:allLogs", (data) => {
+      sock.on("match:allLogs", (data) => {
         console.log("match:allLogs 이벤트 수신:", data);
         handleAllLogs(data);
       });
 
-      socket.on("match:scoreUpdate", (data) => {
+      sock.on("match:scoreUpdate", (data) => {
         console.log("match:scoreUpdate 이벤트 수신:", data);
         handleScoreUpdate(data);
       });
 
-      socket.on("match:end", (data) => {
+      sock.on("match:end", (data) => {
         console.log("match:end 이벤트 수신:", data);
         handleMatchEnd(data);
       });
 
       // 서버에 현재 상태 요청
-      socket.emit("match:requestStatus", { matchId });
+      sock.emit("match:requestStatus", { matchId });
     }
 
     // 컴포넌트 언마운트 시 이벤트 정리

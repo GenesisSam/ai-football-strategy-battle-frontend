@@ -192,3 +192,22 @@ export const getMatchStatus = async (
     throw error;
   }
 };
+
+/**
+ * 매치 결과 이미지 생성 및 공유
+ */
+export const shareMatch = async (
+  matchId: string
+): Promise<{ imageUrl: string }> => {
+  logAPI("매치 결과 공유 요청", { matchId });
+  try {
+    const response = await authFetch(`${API_BASE}/${matchId}/share`, {
+      method: "POST",
+    });
+    logAPI("매치 결과 공유 성공", { matchId, imageUrl: response.imageUrl });
+    return response;
+  } catch (error) {
+    logAPI("매치 결과 공유 실패", error);
+    throw error;
+  }
+};

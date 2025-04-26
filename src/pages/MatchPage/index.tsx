@@ -7,11 +7,41 @@ import React, {
   Suspense,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import styled from "styled-components";
-import { useMatch } from "../context/MatchContext";
-import { useAuth } from "../context/AuthContext";
-import { MatchData, MatchStatus } from "../types/global.d";
-import { getMatchStatus } from "../api/match";
+import { useMatch } from "../../context/MatchContext";
+import { useAuth } from "../../context/AuthContext";
+import { MatchData, MatchStatus } from "../../types/global.d";
+import { getMatchStatus } from "../../api/match";
+import { useSocket } from "../../hooks/useSocket";
+import { shareMatch } from "../../api/match";
+
+import {
+  LoadingIndicator,
+  MatchContainer,
+  ResultContainer,
+  Title,
+  ScoreBoard,
+  TeamInfo,
+  TeamName,
+  Score,
+  Versus,
+  ResultMessage,
+  StatsSection,
+  StatsTitle,
+  StatsList,
+  StatLabel,
+  HomeStat,
+  AwayStat,
+  AnalysisSection,
+  EventsSection,
+  EventsList,
+  EventItem,
+  EventMinute,
+  EventType,
+  EventDescription,
+  Buttons,
+  Button,
+  ErrorMessage,
+} from "./styled";
 
 // 로그 헬퍼 함수
 const logMatchPage = (action: string, data?: any) => {
@@ -19,196 +49,9 @@ const logMatchPage = (action: string, data?: any) => {
 };
 
 // AIStyleLoader를 지연 로딩으로 변경
-const AIStyleLoader = React.lazy(() => import("../components/AIStyleLoader"));
-
-// 로딩 중 표시할 컴포넌트
-const LoadingIndicator = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100vh;
-  font-size: 1.5rem;
-  color: ${({ theme }) => theme.colors.primary};
-`;
-
-const MatchContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  padding: ${({ theme }) => theme.spacing.large};
-`;
-
-const ResultContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: ${({ theme }) => theme.spacing.large};
-`;
-
-const Title = styled.h1`
-  color: ${({ theme }) => theme.colors.primary};
-  margin-bottom: ${({ theme }) => theme.spacing.medium};
-`;
-
-const ScoreBoard = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: ${({ theme }) => theme.spacing.large} 0;
-`;
-
-const TeamInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 200px;
-`;
-
-const TeamName = styled.h2`
-  margin: 0;
-  font-size: 1.5rem;
-`;
-
-const Score = styled.div`
-  background-color: ${({ theme }) => theme.colors.primary};
-  color: white;
-  font-size: 2.5rem;
-  font-weight: bold;
-  padding: ${({ theme }) => theme.spacing.medium};
-  margin: 0 ${({ theme }) => theme.spacing.medium};
-  min-width: 80px;
-  text-align: center;
-  border-radius: 8px;
-`;
-
-const Versus = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  color: ${({ theme }) => theme.colors.text};
-  margin: 0 ${({ theme }) => theme.spacing.small};
-`;
-
-const ResultMessage = styled.div`
-  font-size: 1.5rem;
-  color: ${({ theme }) => theme.colors.secondary};
-  margin: ${({ theme }) => theme.spacing.large} 0;
-  text-align: center;
-`;
-
-const StatsSection = styled.section`
-  margin-top: ${({ theme }) => theme.spacing.large};
-  width: 100%;
-  max-width: 800px;
-`;
-
-const StatsTitle = styled.h3`
-  color: ${({ theme }) => theme.colors.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.light};
-  padding-bottom: ${({ theme }) => theme.spacing.small};
-`;
-
-const StatsList = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 100px 1fr;
-  gap: ${({ theme }) => theme.spacing.small};
-`;
-
-const StatLabel = styled.span`
-  text-align: center;
-  font-weight: bold;
-`;
-
-const HomeStat = styled.span`
-  text-align: right;
-  padding-right: ${({ theme }) => theme.spacing.small};
-`;
-
-const AwayStat = styled.span`
-  text-align: left;
-  padding-left: ${({ theme }) => theme.spacing.small};
-`;
-
-const AnalysisSection = styled.section`
-  margin-top: ${({ theme }) => theme.spacing.large};
-  width: 100%;
-  max-width: 800px;
-  padding: ${({ theme }) => theme.spacing.medium};
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-`;
-
-const EventsSection = styled.section`
-  margin-top: ${({ theme }) => theme.spacing.large};
-  width: 100%;
-  max-width: 800px;
-`;
-
-const EventsList = styled.ul`
-  list-style-type: none;
-  padding: 0;
-`;
-
-const EventItem = styled.li<{ team: "home" | "away" }>`
-  display: flex;
-  align-items: center;
-  padding: ${({ theme }) => theme.spacing.small};
-  margin-bottom: ${({ theme }) => theme.spacing.small};
-  background-color: ${({ team }) =>
-    team === "home" ? "rgba(66, 133, 244, 0.1)" : "rgba(219, 68, 55, 0.1)"};
-  border-radius: 4px;
-  border-left: 4px solid
-    ${({ team, theme }) =>
-      team === "home" ? theme.colors.primary : theme.colors.secondary};
-`;
-
-const EventMinute = styled.span`
-  font-weight: bold;
-  margin-right: ${({ theme }) => theme.spacing.small};
-  color: ${({ theme }) => theme.colors.text};
-`;
-
-const EventType = styled.span`
-  font-weight: bold;
-  margin-right: ${({ theme }) => theme.spacing.small};
-`;
-
-const EventDescription = styled.span`
-  flex: 1;
-`;
-
-const Buttons = styled.div`
-  display: flex;
-  justify-content: center;
-  gap: ${({ theme }) => theme.spacing.medium};
-  margin: ${({ theme }) => theme.spacing.large} 0;
-`;
-
-const Button = styled.button`
-  background-color: ${({ theme }) => theme.colors.primary};
-  color: white;
-  padding: ${({ theme }) => theme.spacing.small}
-    ${({ theme }) => theme.spacing.large};
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-
-  &:hover {
-    background-color: ${({ theme }) => theme.colors.secondary};
-  }
-`;
-
-const ErrorMessage = styled.div`
-  color: ${({ theme }) => theme.colors.danger};
-  background-color: rgba(219, 68, 55, 0.1);
-  padding: ${({ theme }) => theme.spacing.medium};
-  border-radius: 4px;
-  margin-bottom: ${({ theme }) => theme.spacing.medium};
-  text-align: center;
-`;
+const AIStyleLoader = React.lazy(
+  () => import("../../components/AIStyleLoader")
+);
 
 const MatchPage: React.FC = () => {
   const { jobId, matchId } = useParams();
@@ -219,11 +62,23 @@ const MatchPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [match, setMatch] = useState<MatchData | null>(null);
   const [showResults, setShowResults] = useState<boolean>(false);
+  const [sharingStatus, setSharingStatus] = useState<{
+    loading: boolean;
+    url?: string;
+    error?: string;
+  }>({ loading: false });
+
+  // useSocket 훅을 사용하여 웹소켓 연결 관리
+  const { socket, isConnected, error: socketError } = useSocket(matchId);
 
   // interval을 useRef로 관리하여 불필요한 리렌더링 방지
   const pollingIntervalRef = useRef<number | null>(null);
 
-  logMatchPage("컴포넌트 초기화", { jobId, matchId });
+  logMatchPage("컴포넌트 초기화", {
+    jobId,
+    matchId,
+    socketConnected: isConnected,
+  });
 
   // 매치 세부 정보 로딩 함수를 useCallback으로 메모이제이션
   const loadMatchDetails = useCallback(async () => {
@@ -261,11 +116,54 @@ const MatchPage: React.FC = () => {
     }
   }, []);
 
-  // 매치 상태 poll 구동 - 의존성 배열 최적화
+  // 웹소켓 이벤트 처리
   useEffect(() => {
-    // 작업 ID가 있을 경우에는 AIStyleLoader에서 소켓으로 처리하므로 poll 불필요
-    if (matchId && !jobId && !showResults) {
-      logMatchPage("매치 상태 폴링 시작", { matchId });
+    if (!socket || !matchId) return;
+
+    // 매치 상태 변경 이벤트 핸들러
+    const handleStatusChange = (data: any) => {
+      if (data.matchId === matchId) {
+        logMatchPage("웹소켓으로 매치 상태 업데이트 수신", data);
+
+        // 매치가 종료되면 완료 처리
+        if (data.status === MatchStatus.MATCH_ENDED) {
+          logMatchPage("웹소켓으로 매치 종료 감지", { matchId });
+          loadMatchDetails();
+          stopPolling();
+        }
+      }
+    };
+
+    // 매치 이벤트 수신 핸들러
+    const handleMatchEvent = (data: any) => {
+      if (data.matchId === matchId) {
+        logMatchPage("웹소켓으로 매치 이벤트 수신", data);
+        // 필요시 이벤트를 상태에 반영하는 로직 추가
+      }
+    };
+
+    // 이벤트 리스너 등록
+    socket.on("match_status_change", handleStatusChange);
+    socket.on("match_event", handleMatchEvent);
+
+    // 정리 함수
+    return () => {
+      socket.off("match_status_change", handleStatusChange);
+      socket.off("match_event", handleMatchEvent);
+    };
+  }, [socket, matchId, loadMatchDetails, stopPolling]);
+
+  // 매치 진행 상태 폴링 함수 개선 - 웹소켓이 연결되지 않은 경우에만 폴링
+  useEffect(() => {
+    // 웹소켓이 연결되어 있거나, 작업 ID가 있거나, 이미 결과 표시 중이면 폴링 불필요
+    if (isConnected || jobId || showResults) {
+      stopPolling();
+      return;
+    }
+
+    // matchId가 있고 폴링이 필요한 경우
+    if (matchId && !isConnected) {
+      logMatchPage("웹소켓 연결 없음, 매치 상태 폴링 시작", { matchId });
 
       const pollMatchStatus = async () => {
         try {
@@ -291,7 +189,6 @@ const MatchPage: React.FC = () => {
               matchId,
               status: statusResponse.status,
             });
-            // 매치가 진행 중일 때도 주기적으로 상태 업데이트
             setLoading(false); // 로딩 상태 해제
           }
         } catch (err) {
@@ -303,17 +200,49 @@ const MatchPage: React.FC = () => {
       pollMatchStatus();
 
       // 5초마다 상태 확인 (poll)
-      logMatchPage("매치 상태 폴링 간격 설정", { interval: 5000 });
-      pollingIntervalRef.current = setInterval(
-        pollMatchStatus,
-        5000
-      ) as unknown as number;
+      if (!pollingIntervalRef.current) {
+        logMatchPage("매치 상태 폴링 간격 설정", { interval: 5000 });
+        pollingIntervalRef.current = setInterval(
+          pollMatchStatus,
+          5000
+        ) as unknown as number;
+      }
 
       return stopPolling;
     }
 
     return undefined;
-  }, [matchId, jobId, showResults, loadMatchDetails, stopPolling]);
+  }, [matchId, jobId, showResults, loadMatchDetails, stopPolling, isConnected]);
+
+  // 매치 공유 기능
+  const handleShareMatch = useCallback(async () => {
+    if (!match) return;
+
+    try {
+      setSharingStatus({ loading: true });
+      logMatchPage("매치 결과 공유 요청", { matchId: match.id });
+
+      const response = await shareMatch(match.id);
+      logMatchPage("매치 결과 공유 성공", { imageUrl: response.imageUrl });
+
+      // 공유 URL 상태 저장
+      setSharingStatus({ loading: false, url: response.imageUrl });
+
+      // 클립보드에 URL 복사
+      await navigator.clipboard.writeText(response.imageUrl);
+
+      // 간단한 알림 메시지
+      alert("매치 결과 이미지 URL이 클립보드에 복사되었습니다.");
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error
+          ? err.message
+          : "매치 공유 중 오류가 발생했습니다.";
+      logMatchPage("매치 공유 실패", { error: errorMsg });
+      setSharingStatus({ loading: false, error: errorMsg });
+      alert(`매치 공유 실패: ${errorMsg}`);
+    }
+  }, [match]);
 
   // 기존 매치 ID가 있을 때 결과 로딩
   useEffect(() => {
@@ -413,19 +342,6 @@ const MatchPage: React.FC = () => {
         </MatchContainer>
       );
     }
-
-    // 매치가 있지만 showResults가 false인 경우 (결과를 표시하지 않는 경우)
-    // 이 부분이 무한 루프를 일으킬 수 있어 조건을 제거하고 바로 결과를 표시
-    // if (!showResults && match) {
-    //   return (
-    //     <Suspense fallback={<LoadingIndicator>로딩 중...</LoadingIndicator>}>
-    //       <AIStyleLoader
-    //         matchId={match.id}
-    //         onMatchComplete={handleMatchComplete}
-    //       />
-    //     </Suspense>
-    //   );
-    // }
 
     if (match) {
       const isUserHomeTeam = user?.id === match.homeTeam.userId;
@@ -534,7 +450,20 @@ const MatchPage: React.FC = () => {
             <Buttons>
               <Button onClick={handleReturnHome}>메인으로 돌아가기</Button>
               <Button onClick={handleReplay}>다시 보기</Button>
+              <Button
+                onClick={handleShareMatch}
+                disabled={sharingStatus.loading}
+              >
+                {sharingStatus.loading ? "공유 중..." : "결과 공유하기"}
+              </Button>
             </Buttons>
+
+            {socketError && (
+              <ErrorMessage>
+                웹소켓 연결 오류: {socketError}. 실시간 업데이트가 제한될 수
+                있습니다.
+              </ErrorMessage>
+            )}
           </ResultContainer>
         </MatchContainer>
       );
@@ -548,10 +477,13 @@ const MatchPage: React.FC = () => {
     showResults,
     match,
     error,
+    socketError,
     user,
+    sharingStatus.loading,
     handleMatchComplete,
     handleReturnHome,
     handleReplay,
+    handleShareMatch,
   ]);
 
   return renderContent;

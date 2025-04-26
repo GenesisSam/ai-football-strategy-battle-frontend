@@ -4,7 +4,6 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import GlobalStyle from "./styles/GlobalStyle";
 import theme from "./styles/theme";
 import SplashScreen from "./components/SplashScreen";
-import Layout from "./components/layout/Layout";
 import HomePage from "./pages/HomePage";
 import { AuthProvider } from "./context/AuthContext";
 import { SquadProvider } from "./context/SquadContext";
@@ -25,8 +24,8 @@ function App() {
             <Router>
               <Suspense fallback={<SplashScreen />}>
                 <Routes>
-                  <Route path="/" element={<Layout />}>
-                    <Route index element={<HomePage />} />
+                  <Route path="/">
+                    <Route index Component={HomePage} />
                     <Route
                       path="strategy"
                       element={<ProtectedRoute />}
@@ -37,11 +36,11 @@ function App() {
                       element={<ProtectedRoute />}
                       Component={StrategyPage}
                     />
-                    <Route path="match/:matchId" element={<MatchPage />} />
-                    <Route path="match/job/:jobId" element={<MatchPage />} />
+                    <Route path="match/:matchId" Component={MatchPage} />
+                    <Route path="match/job/:jobId" Component={MatchPage} />
                     <Route
                       path="*"
-                      element={<div>페이지를 찾을 수 없습니다.</div>}
+                      Component={() => <div>페이지를 찾을 수 없습니다.</div>}
                     />
                   </Route>
                 </Routes>

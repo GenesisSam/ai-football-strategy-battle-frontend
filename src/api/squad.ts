@@ -42,14 +42,14 @@ export interface StrategyObject {
 // 스쿼드 인터페이스
 export interface Squad {
   _id: string;
+  userId: string;
   name: string;
   formation: string;
   players: Player[];
-  strategy: string; // 기존 API와의 호환성을 위해 string 유지
-  userId: string;
-  createdAt: string;
-  updatedAt?: string;
+  strategy: StrategyObject; // 객체 타입으로 변경
   isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 스쿼드 목록용 간략한 인터페이스
@@ -65,8 +65,8 @@ export interface SquadSummary {
 export interface SquadRequest {
   name: string;
   formation: string;
-  players: Player[];
-  strategy: StrategyObject; // 객체 타입으로 변경
+  players: Player[]; // Player로 변경
+  strategy: StrategyObject;
 }
 
 // 스쿼드 생성
