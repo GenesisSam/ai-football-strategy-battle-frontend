@@ -215,7 +215,7 @@ const HomePage: React.FC = () => {
           height: "100vh",
         }}
       >
-        <AIStyleLoader statusText="전략 정보 불러오는 중..." />
+        <AIStyleLoader />
       </div>
     );
   }
@@ -233,7 +233,7 @@ const HomePage: React.FC = () => {
       )}
       {startingMatch && (
         <LoadingOverlay>
-          <AIStyleLoader statusText="매치 준비 중..." />
+          <AIStyleLoader />
         </LoadingOverlay>
       )}
       <HomeContainer>

@@ -25,13 +25,27 @@ export interface Player {
   attributes: PlayerAttributes;
 }
 
+// 전략 인터페이스 추가
+export interface StrategyObject {
+  strategyName: string;
+  attackStyle: string;
+  defenseStyle: string;
+  specialDirectingInstrument: string;
+  formation: string;
+  selectionSquadList: string[];
+  replacementSquadList: string[];
+  lineUp: {
+    [positionName: string]: string[];
+  };
+}
+
 // 스쿼드 인터페이스
 export interface Squad {
   _id: string;
   name: string;
   formation: string;
   players: Player[];
-  strategy: string;
+  strategy: string; // 기존 API와의 호환성을 위해 string 유지
   userId: string;
   createdAt: string;
   updatedAt?: string;
@@ -52,7 +66,7 @@ export interface SquadRequest {
   name: string;
   formation: string;
   players: Player[];
-  strategy: string;
+  strategy: StrategyObject; // 객체 타입으로 변경
 }
 
 // 스쿼드 생성

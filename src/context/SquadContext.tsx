@@ -108,6 +108,10 @@ export const SquadProvider: React.FC<SquadProviderProps> = ({ children }) => {
   // 스쿼드 상세 정보 조회
   const fetchSquadById = useCallback(
     async (id: string): Promise<Squad | null> => {
+      if (id === "new") {
+        setIsLoading(false);
+        return null;
+      }
       try {
         setIsLoading(true);
         setError(null);

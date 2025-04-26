@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { useSocket } from "../../hooks/useSocket";
-import { MatchStatus } from "../../types/global";
+import { MatchStatus } from "../../types/global.d";
 
 const LoaderContainer = styled.div`
   display: flex;
@@ -115,6 +115,7 @@ const STATUS_MESSAGES = {
 interface AIStyleLoaderProps {
   jobId?: string; // 비동기 매치 작업 ID
   matchId?: string; // 직접 매치 ID
+  statusText?: string; // 상태 메시지
   onMatchComplete?: (matchId: string) => void;
 }
 

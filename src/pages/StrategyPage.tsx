@@ -63,6 +63,18 @@ const Button = styled.button`
   }
 `;
 
+const EditButton = styled(Button)`
+  background-color: ${({ theme }) => theme.colors.secondary};
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &.active {
+    background-color: ${({ theme }) => theme.colors.accent};
+  }
+`;
+
 const CancelButton = styled(Button)`
   background-color: ${({ theme }) => theme.colors.danger};
 
@@ -118,7 +130,7 @@ const FormationOptGroup = styled.optgroup`
 
 const StrategyPage: React.FC = () => {
   const { id } = useParams();
-  const isNewStrategy = id === undefined;
+  const isNewStrategy = id === undefined || id === "new";
   const navigate = useNavigate();
   const refLoading = React.useRef(false);
 
@@ -144,6 +156,9 @@ const StrategyPage: React.FC = () => {
   // 유효성 검사
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // 편집 모드 상태
+  const [isEditing, setIsEditing] = useState<boolean>(isNewStrategy);
+
   // 스쿼드 로딩
   useEffect(() => {
     if (!isNewStrategy && id && !refLoading.current) {
@@ -153,17 +168,29 @@ const StrategyPage: React.FC = () => {
           setSquadName(squad.name);
           setFormation(squad.formation);
 
+          // 포메이션의 포지션 정보 가져오기
+          const formationPositions =
+            formations[squad.formation]?.positions || [];
+
           // 선수들을 포지션 인덱스와 함께 저장
           const playersWithPositions: PositionPlayer[] = squad.players.map(
-            (player, index) => ({
-              ...player,
-              positionIndex: index,
-            })
+            (player, index) => {
+              // 포메이션 포지션과 매칭할 인덱스 찾기
+              // 서버에서 받은 position과 일치하는 포메이션 포지션 찾기
+              const positionIndex = formationPositions.findIndex(
+                (pos) => pos.position === player.position
+              );
+
+              return {
+                ...player,
+                positionIndex: positionIndex !== -1 ? positionIndex : index,
+              };
+            }
           );
 
           setPlayers(playersWithPositions);
 
-          // 전략 정보 파싱
+          // 전략 정보 파싱 (문자열에서 필요한 정보 추출)
           const strategyLines = squad.strategy.split("\n");
           if (strategyLines.length >= 3) {
             setAttackStyle(strategyLines[0]);
@@ -173,17 +200,31 @@ const StrategyPage: React.FC = () => {
             setSpecialInstructions(squad.strategy);
           }
 
+          // 기존 스쿼드 조회 시에는 기본적으로 편집 모드가 아님
+          setIsEditing(false);
           refLoading.current = false;
         }
       });
+    } else if (isNewStrategy) {
+      // 새 스쿼드 생성 시에는 기본적으로 편집 모드임
+      setIsEditing(true);
     }
-  }, [id]);
+  }, [id, isNewStrategy, fetchSquadById]);
+
+  // 편집 모드 전환 핸들러
+  const handleEditModeToggle = useCallback(() => {
+    setIsEditing((prev) => !prev);
+  }, []);
 
   // 포지션 클릭 핸들러 - useCallback으로 최적화
-  const handlePositionClick = useCallback((positionIndex: number) => {
-    setSelectedPositionIndex(positionIndex);
-    setShowModal(true);
-  }, []);
+  const handlePositionClick = useCallback(
+    (positionIndex: number) => {
+      if (!isEditing) return; // 편집 모드가 아니면 클릭 무시
+      setSelectedPositionIndex(positionIndex);
+      setShowModal(true);
+    },
+    [isEditing]
+  );
 
   // 선수 선택 핸들러 - useCallback으로 최적화
   const handleSelectPlayer = useCallback(
@@ -191,19 +232,27 @@ const StrategyPage: React.FC = () => {
       setPlayers((prev) => {
         if (selectedPositionIndex === null) return prev;
 
-        // 이미 선택된 선수인지 확인
-        const isAlreadySelected = prev.some(
-          (p) =>
-            p.name === playerName && p.positionIndex !== selectedPositionIndex
+        // 이미 다른 포지션에 배치된 선수인지 확인
+        const alreadySelectedPlayerIndex = prev.findIndex(
+          (p) => p.name === playerName
         );
+        const isAlreadySelected =
+          alreadySelectedPlayerIndex !== -1 &&
+          prev[alreadySelectedPlayerIndex].positionIndex !==
+            selectedPositionIndex;
 
         // 이미 다른 포지션에 배치된 선수라면 기존 선수를 유지
         if (isAlreadySelected) {
           return prev;
         }
 
-        // 선택된 선수에 맞는 능력치 생성
-        const attributes = generatePlayerAttributes(position);
+        // 기존 선수의 능력치 확인 (포지션 이동 시 능력치 유지)
+        const existingPlayer = prev.find((p) => p.name === playerName);
+
+        // 선수의 능력치 설정: 기존 선수면 능력치 유지, 새 선수면 생성
+        const attributes = existingPlayer
+          ? existingPlayer.attributes
+          : generatePlayerAttributes(position);
 
         const newPlayer: Player = {
           name: playerName,
@@ -288,6 +337,11 @@ const StrategyPage: React.FC = () => {
     }
   };
 
+  // 현재 포메이션에 따른 포지션들 - useMemo로 최적화
+  const currentPositions = useMemo(() => {
+    return formations[formation]?.positions || [];
+  }, [formation]);
+
   // 폼 제출 핸들러 - useCallback으로 최적화
   const handleSubmit = useCallback(async () => {
     // 유효성 검사
@@ -306,8 +360,33 @@ const StrategyPage: React.FC = () => {
       return;
     }
 
-    // 전략 문자열 생성
-    const strategy = `${attackStyle}\n${defenseStyle}\n${specialInstructions}`;
+    // lineUp 객체 구성 - 포메이션 포지션 이름별 선수 매핑
+    const lineUp: { [positionName: string]: string[] } = {};
+
+    players.forEach((player) => {
+      if (player.positionIndex !== undefined && player.positionIndex !== null) {
+        const positionInfo = currentPositions[player.positionIndex];
+        if (positionInfo) {
+          const positionName = positionInfo.position;
+          if (!lineUp[positionName]) {
+            lineUp[positionName] = [];
+          }
+          lineUp[positionName].push(player.name);
+        }
+      }
+    });
+
+    // API 요청을 위한 strategy 객체 생성
+    const strategyObject = {
+      strategyName: `${squadName}의 전략`,
+      attackStyle: attackStyle,
+      defenseStyle: defenseStyle,
+      specialDirectingInstrument: specialInstructions,
+      formation: formation,
+      selectionSquadList: [],
+      replacementSquadList: [],
+      lineUp: lineUp,
+    };
 
     // API 요청 데이터 생성
     const requestData: SquadRequest = {
@@ -315,12 +394,18 @@ const StrategyPage: React.FC = () => {
       formation,
       players: players
         .sort((a, b) => a.positionIndex - b.positionIndex)
-        .map((p) => ({
-          name: p.name,
-          position: p.position,
-          attributes: p.attributes,
-        })),
-      strategy,
+        .map((p, index) => {
+          // 해당 인덱스의 포메이션 포지션 정보 가져오기
+          const formationPosition =
+            currentPositions[p.positionIndex]?.position || p.position;
+
+          return {
+            name: p.name,
+            position: formationPosition, // 포메이션 포지션 이름 사용
+            attributes: p.attributes,
+          };
+        }),
+      strategy: strategyObject,
     };
 
     try {
@@ -355,17 +440,112 @@ const StrategyPage: React.FC = () => {
     createNewSquad,
     updateExistingSquad,
     navigate,
+    currentPositions,
   ]);
-
-  // 현재 포메이션에 따른 포지션들 - useMemo로 최적화
-  const currentPositions = useMemo(() => {
-    return formations[formation]?.positions || [];
-  }, [formation]);
 
   // 포메이션 변경 핸들러 - useCallback으로 최적화
   const handleFormationChange = useCallback((newFormation: string) => {
     setFormation(newFormation);
-    setPlayers([]); // 포메이션 변경 시 선수 포지션 재설정
+
+    // 포메이션 변경 시 선수 정보를 유지하되 배치 초기화
+    setPlayers((prevPlayers) => {
+      // 기존 선수들의 정보를 저장
+      const existingPlayerMap = new Map();
+
+      // 기존 선수 정보 저장 (이름을 키로, 선수 객체를 값으로)
+      prevPlayers.forEach((player) => {
+        existingPlayerMap.set(player.name, {
+          name: player.name,
+          position: player.position,
+          attributes: player.attributes,
+        });
+      });
+
+      // 새 포메이션의 포지션 정보 가져오기
+      const newPositions = formations[newFormation]?.positions || [];
+
+      // 새 배치에 맞게 선수 포지션 재설정 (능력치는 그대로 유지)
+      const newPlayers: PositionPlayer[] = [];
+
+      // 1. 골키퍼(GK)는 항상 유지
+      const gkPositionIndex = newPositions.findIndex(
+        (pos) => pos.position === "GK"
+      );
+      const existingGk = prevPlayers.find((p) => p.position === "GK");
+
+      if (gkPositionIndex !== -1 && existingGk) {
+        newPlayers.push({
+          ...existingGk,
+          positionIndex: gkPositionIndex,
+        });
+      }
+
+      // 2. 주요 포지션 그룹별로 선수 재배치 시도
+      // 수비수, 미드필더, 공격수 그룹을 각각 유지하며 재배치
+      const positionGroups = {
+        defenders: ["CB", "RB", "LB", "RWB", "LWB"],
+        midfielders: ["CDM", "CM", "CAM", "RM", "LM"],
+        forwards: ["ST", "CF", "RW", "LW"],
+      };
+
+      // 기존 선수들을 포지션 그룹별로 분류
+      const existingDefenders = prevPlayers.filter((p) =>
+        positionGroups.defenders.some((pos) => p.position.includes(pos))
+      );
+
+      const existingMidfielders = prevPlayers.filter((p) =>
+        positionGroups.midfielders.some((pos) => p.position.includes(pos))
+      );
+
+      const existingForwards = prevPlayers.filter((p) =>
+        positionGroups.forwards.some((pos) => p.position.includes(pos))
+      );
+
+      // 새 포메이션의 각 포지션 그룹 자리 찾기
+      const defenderPositions = newPositions.filter(
+        (pos, idx) =>
+          idx !== gkPositionIndex &&
+          positionGroups.defenders.some((p) => pos.position.includes(p))
+      );
+
+      const midfielderPositions = newPositions.filter(
+        (pos, idx) =>
+          idx !== gkPositionIndex &&
+          positionGroups.midfielders.some((p) => pos.position.includes(p))
+      );
+
+      const forwardPositions = newPositions.filter(
+        (pos, idx) =>
+          idx !== gkPositionIndex &&
+          positionGroups.forwards.some((p) => pos.position.includes(p))
+      );
+
+      // 각 그룹별로 가능한 많은 선수를 재배치
+      const assignPlayers = (players: PositionPlayer[], positions: any[]) => {
+        return players.slice(0, positions.length).map((player, idx) => ({
+          name: player.name,
+          position: positions[idx].position,
+          attributes: player.attributes,
+          positionIndex: newPositions.findIndex((p) => p === positions[idx]),
+        }));
+      };
+
+      // 선수 재배치 실행
+      newPlayers.push(...assignPlayers(existingDefenders, defenderPositions));
+      newPlayers.push(
+        ...assignPlayers(existingMidfielders, midfielderPositions)
+      );
+      newPlayers.push(...assignPlayers(existingForwards, forwardPositions));
+
+      // 중복 선수 제거 (같은 positionIndex를 가진 선수가 있을 경우)
+      const uniquePlayers = newPlayers.filter(
+        (player, index, self) =>
+          index ===
+          self.findIndex((p) => p.positionIndex === player.positionIndex)
+      );
+
+      return uniquePlayers;
+    });
   }, []);
 
   // 취소 버튼 핸들러 - useCallback으로 최적화
@@ -387,12 +567,28 @@ const StrategyPage: React.FC = () => {
   return (
     <StrategyContainer>
       <Header>
-        <Title>{isNewStrategy ? "새 전략 만들기" : "전략 수정하기"}</Title>
+        <Title>{isNewStrategy ? "새 전략 만들기" : "전략 정보"}</Title>
         <ActionButtons>
-          <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? "저장 중..." : "전략 저장"}
-          </Button>
-          <CancelButton onClick={handleCancel}>취소</CancelButton>
+          {isEditing ? (
+            <>
+              <Button onClick={handleSubmit} disabled={isLoading}>
+                {isLoading ? "저장 중..." : "전략 저장"}
+              </Button>
+              <CancelButton onClick={() => setIsEditing(false)}>
+                취소
+              </CancelButton>
+            </>
+          ) : (
+            <>
+              <EditButton
+                onClick={handleEditModeToggle}
+                className={isEditing ? "active" : ""}
+              >
+                {isNewStrategy ? "새 전략 만들기" : "전략 편집하기"}
+              </EditButton>
+              <CancelButton onClick={handleCancel}>뒤로 가기</CancelButton>
+            </>
+          )}
         </ActionButtons>
       </Header>
 
@@ -426,6 +622,7 @@ const StrategyPage: React.FC = () => {
                 id="formation"
                 value={formation}
                 onChange={(e) => handleFormationChange(e.target.value)}
+                disabled={!isEditing}
               >
                 <FormationOptGroup label="3 Back">
                   <option value="3-4-3">3-4-3</option>

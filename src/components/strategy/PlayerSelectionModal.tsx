@@ -8,7 +8,11 @@ import React, {
 import styled from "styled-components";
 import { FixedSizeList as List } from "react-window";
 import debounce from "lodash.debounce";
-import { getAllPlayers, searchPlayers } from "../../api/player";
+import {
+  getAllPlayers,
+  searchPlayers,
+  searchPlayersDetailed,
+} from "../../api/player";
 
 // 포지션 축약어와 풀네임 매핑
 const positionMapping: Record<string, string> = {
@@ -75,13 +79,45 @@ const CloseButton = styled.button`
   color: ${({ theme }) => theme.colors.dark};
 `;
 
-// 검색 입력
+// 검색 폼 컨테이너 추가
+const SearchForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.small};
+  margin-bottom: ${({ theme }) => theme.spacing.medium};
+`;
+
+// 검색 입력 행 (Search Row)
+const SearchRow = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.small};
+`;
+
+// 검색 입력 (Search Input)
 const SearchInput = styled.input`
   width: 100%;
   padding: 8px;
   border: 1px solid ${({ theme }) => theme.colors.neutral};
   border-radius: 4px;
-  margin-bottom: ${({ theme }) => theme.spacing.medium};
+`;
+
+// 검색 모드 토글 버튼
+const SearchModeToggle = styled.button<{ isActive: boolean }>`
+  background-color: ${({ isActive, theme }) =>
+    isActive ? theme.colors.primary : theme.colors.light};
+  color: ${({ isActive, theme }) => (isActive ? "white" : theme.colors.dark)};
+  border: 1px solid ${({ theme }) => theme.colors.neutral};
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: ${({ isActive, theme }) =>
+      isActive ? theme.colors.primary : theme.colors.light};
+    opacity: 0.9;
+  }
 `;
 
 // 선수 목록 컨테이너
@@ -146,16 +182,6 @@ const Message = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.medium};
   text-align: center;
   color: ${({ theme }) => theme.colors.dark};
-`;
-
-// 로딩 인디케이터 스타일
-const LoadingIndicator = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 200px;
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 1.2rem;
 `;
 
 // 에러 메시지 스타일
@@ -239,6 +265,12 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   const [players, setPlayers] = useState<PlayerType[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<PlayerType[]>([]);
   const hasFetchedRef = useRef<boolean>(false);
+
+  // 상세 검색을 위한 상태 추가
+  const [isDetailedSearch, setIsDetailedSearch] = useState<boolean>(false);
+  const [nameFilter, setNameFilter] = useState<string>("");
+  const [teamFilter, setTeamFilter] = useState<string>("");
+  const [positionFilter, setPositionFilter] = useState<string>("");
 
   // API에서 선수 데이터 가져오기
   useEffect(() => {
@@ -347,17 +379,44 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   const handleSearch = useMemo(
     () =>
       debounce(async (query: string) => {
+        // 검색어가 없으면 포지션 기반 필터링으로 돌아감
         if (!query) {
-          setFilteredPlayers(players);
+          // 포지션이 있으면 포지션으로 검색
+          if (positionName) {
+            setLoading(true);
+            try {
+              const positionResults = await searchPlayers(positionName);
+              const formattedResults = positionResults.map((player) => ({
+                name: player.name,
+                position: getPositionFullName(player.position),
+                team: player.team,
+                imgInitial: player.name.charAt(0).toUpperCase(),
+              }));
+              setFilteredPlayers(formattedResults);
+            } catch (err) {
+              console.error(
+                `${positionName} 포지션 선수 검색 중 오류 발생:`,
+                err
+              );
+              setError(
+                `${positionName} 포지션 선수 검색 중 오류가 발생했습니다.`
+              );
+            } finally {
+              setLoading(false);
+            }
+          } else {
+            // 포지션이 없으면 모든 선수 표시
+            setFilteredPlayers(players);
+          }
           return;
         }
 
         setLoading(true);
         try {
-          // 길이가 2 이상이면 API에서 검색
+          // 길이가 2 이상이면 API에서 검색 (검색어만 사용)
           if (query.length >= 2) {
-            // 포지션 정보가 있을 때는 포지션 기반 검색에 추가 필터링
-            const results = await searchPlayers(`${query ?? positionName}`);
+            // 검색어가 있으면 검색어를 우선적으로 사용
+            const results = await searchPlayers(query);
             const formattedResults = results.map((player) => ({
               name: player.name,
               position: getPositionFullName(player.position),
@@ -385,15 +444,94 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
     [players, positionName]
   );
 
+  // 상세 검색 처리 함수
+  const handleDetailedSearch = useMemo(
+    () =>
+      debounce(async () => {
+        if (!nameFilter && !teamFilter && !positionFilter) {
+          // 모든 필터가 비어있으면 원래 포지션 기반 필터링으로 돌아감
+          if (positionName) {
+            fetchPlayersByPosition(positionName);
+          } else {
+            setFilteredPlayers(players);
+          }
+          return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+          // 상세 검색 API 호출
+          const filters = {
+            name: nameFilter || undefined,
+            team: teamFilter || undefined,
+            position: positionFilter || positionName || undefined,
+          };
+
+          const results = await searchPlayersDetailed(filters);
+
+          const formattedResults = results.map((player) => ({
+            name: player.name,
+            position: getPositionFullName(player.position),
+            team: player.team,
+            imgInitial: player.name.charAt(0).toUpperCase(),
+          }));
+
+          setFilteredPlayers(formattedResults);
+        } catch (err) {
+          console.error("상세 선수 검색 중 오류가 발생했습니다:", err);
+          setError("상세 검색 중 오류가 발생했습니다. 다시 시도해주세요.");
+        } finally {
+          setLoading(false);
+        }
+      }, 300),
+    [nameFilter, teamFilter, positionFilter, positionName, players]
+  );
+
+  // 검색 모드 토글
+  const toggleSearchMode = () => {
+    setIsDetailedSearch(!isDetailedSearch);
+    // 모드 변경 시 검색어 초기화
+    setSearchTerm("");
+    setNameFilter("");
+    setTeamFilter("");
+    setPositionFilter(positionName || "");
+
+    // 원래 목록으로 초기화
+    if (positionName) {
+      fetchPlayersByPosition(positionName);
+    } else {
+      setFilteredPlayers(players);
+    }
+  };
+
   // 검색어 변경시 검색 함수 호출
   useEffect(() => {
-    handleSearch(searchTerm);
-
+    if (!isDetailedSearch) {
+      handleSearch(searchTerm);
+    }
     // 컴포넌트 언마운트 시 실행 중인 디바운스 취소
     return () => {
       handleSearch.cancel();
     };
-  }, [searchTerm, handleSearch]);
+  }, [searchTerm, handleSearch, isDetailedSearch]);
+
+  // 상세 검색 필터 변경 시 상세 검색 함수 호출
+  useEffect(() => {
+    if (isDetailedSearch) {
+      handleDetailedSearch();
+    }
+    return () => {
+      handleDetailedSearch.cancel();
+    };
+  }, [
+    nameFilter,
+    teamFilter,
+    positionFilter,
+    handleDetailedSearch,
+    isDetailedSearch,
+  ]);
 
   const isComponentLoading = loading || externalLoading;
 
@@ -449,12 +587,48 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
           <CloseButton onClick={onClose}>×</CloseButton>
         </ModalHeader>
 
-        <SearchInput
-          type="text"
-          placeholder="선수 이름, 포지션 또는 팀 검색..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <SearchModeToggle
+          isActive={isDetailedSearch}
+          onClick={toggleSearchMode}
+        >
+          {isDetailedSearch ? "기본 검색으로 전환" : "상세 검색으로 전환"}
+        </SearchModeToggle>
+
+        {isDetailedSearch ? (
+          <SearchForm>
+            <SearchRow>
+              <SearchInput
+                type="text"
+                placeholder="선수 이름 검색..."
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+              />
+            </SearchRow>
+            <SearchRow>
+              <SearchInput
+                type="text"
+                placeholder="팀명 검색..."
+                value={teamFilter}
+                onChange={(e) => setTeamFilter(e.target.value)}
+              />
+            </SearchRow>
+            <SearchRow>
+              <SearchInput
+                type="text"
+                placeholder="포지션 검색..."
+                value={positionFilter}
+                onChange={(e) => setPositionFilter(e.target.value)}
+              />
+            </SearchRow>
+          </SearchForm>
+        ) : (
+          <SearchInput
+            type="text"
+            placeholder="선수 이름, 포지션 또는 팀 검색..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        )}
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
 

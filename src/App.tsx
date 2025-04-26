@@ -29,19 +29,13 @@ function App() {
                     <Route index element={<HomePage />} />
                     <Route
                       path="strategy"
-                      element={
-                        <ProtectedRoute>
-                          <StrategyPage />
-                        </ProtectedRoute>
-                      }
+                      element={<ProtectedRoute />}
+                      Component={StrategyPage}
                     />
                     <Route
                       path="strategy/:id"
-                      element={
-                        <ProtectedRoute>
-                          <StrategyPage />
-                        </ProtectedRoute>
-                      }
+                      element={<ProtectedRoute />}
+                      Component={StrategyPage}
                     />
                     <Route path="match/:id" element={<MatchPage />} />
                     <Route

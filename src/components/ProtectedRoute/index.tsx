@@ -2,7 +2,7 @@ import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-const ProtectedRoute: React.FC = () => {
+const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -17,7 +17,7 @@ const ProtectedRoute: React.FC = () => {
   }
 
   // 인증된 경우 자식 라우트 렌더링
-  return <Outlet />;
+  return <>{children ?? <Outlet />}</>;
 };
 
 export default ProtectedRoute;

@@ -15,17 +15,7 @@ const axiosInstance = axios.create({
 });
 
 // 캐싱 설정이 적용된 API 클라이언트 생성
-export const apiClient = setupCache(axiosInstance, {
-  // GET 요청에 대해 5분 동안 캐싱
-  ttl: 5 * 60 * 1000,
-  methods: ["get"],
-  // 캐시 키 생성 (URL + 토큰 조합으로 사용자별 캐시)
-  generateKey: (request) => {
-    const token = localStorage.getItem("token") || "";
-    const tokenHash = token ? token.substring(token.length - 8) : "no-token";
-    return `${request.url}-${tokenHash}`;
-  },
-});
+export const apiClient = axiosInstance;
 
 // 인증된 API 요청을 위한 함수
 export const authFetch = async <T>(
@@ -117,27 +107,5 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// 에러 디버깅을 위한 응답 로깅 (개발 중에만 활성화)
-if (import.meta.env.DEV) {
-  apiClient.interceptors.response.use(
-    (response) => {
-      // 캐시에서 가져온 응답인지 확인
-      const fromCache = response.request?.fromCache || false;
-      console.log(
-        `[API ${fromCache ? "Cache Hit" : "Success"}] ${response.config.url}`,
-        fromCache ? "[캐시된 데이터]" : response.data
-      );
-      return response;
-    },
-    (error) => {
-      console.error(
-        `[API Error] ${error.config?.url || "알 수 없는 URL"}`,
-        error.response?.data || error.message
-      );
-      return Promise.reject(error);
-    }
-  );
-}
 
 export default apiClient;

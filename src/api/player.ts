@@ -42,6 +42,16 @@ export interface PlayerAttributesFilter {
   position?: string;
 }
 
+// 상세 검색을 위한 필터 인터페이스 추가
+export interface DetailedPlayerSearchFilter {
+  name?: string;
+  team?: string;
+  position?: string;
+  nationality?: string;
+  minAge?: number;
+  maxAge?: number;
+}
+
 // 포지션 축약어와 풀네임 매핑
 const positionMapping: Record<string, string> = {
   GK: "Goalkeeper",
@@ -110,6 +120,19 @@ export const searchPlayers = async (query: string): Promise<EPLPlayer[]> => {
   const response = await apiClient.get<EPLPlayer[]>(`/epl-players/search`, {
     params: { query: searchQuery },
   });
+  return response.data;
+};
+
+// 상세 검색 함수 추가
+export const searchPlayersDetailed = async (
+  filters: DetailedPlayerSearchFilter
+): Promise<EPLPlayer[]> => {
+  const response = await apiClient.get<EPLPlayer[]>(
+    `/epl-players/detailed-search`,
+    {
+      params: filters,
+    }
+  );
   return response.data;
 };
 
