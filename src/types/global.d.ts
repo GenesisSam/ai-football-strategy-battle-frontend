@@ -1,28 +1,78 @@
-declare global {
-  interface Window {
-    __COMPONENT_ID__: string;
-    hammer: any; // hammer.js instance
+// 전역 타입 선언
 
-    __INIT_STATE__: {
-      groupId: string;
-      channelId: string;
-      threadId: string;
-      replyId?: string;
-      embedObject?: Record<string, any>;
-      inApp: boolean;
-      isEP?: boolean;
-      isAndroid?: boolean;
-      isIOS?: boolean;
-
-      sharedObject?: Record<string, any>;
-
-      // NOTE: 11+에서만 제공하는 정보
-      currentUser?: Record<string, any>;
-      authToken?: string;
-      refreshToken?: string;
-    };
-  }
+// API 응답 메타 데이터
+export interface ApiResponseMeta {
+  status: number;
+  message: string;
 }
 
-// 빈 export를 추가하여 이 파일이 모듈로 인식되도록 합니다
-export {};
+// API 응답 래퍼
+export interface ApiResponse<T> {
+  data: T;
+  meta: ApiResponseMeta;
+}
+
+// 매치 상태 enum (백엔드와 동일하게 유지)
+export enum MatchStatus {
+  MATCHMAKING = "MATCHMAKING", // 매칭 중
+  OPPONENT_FOUND = "OPPONENT_FOUND", // 대결상대 찾음
+  PREPARING_STADIUM = "PREPARING_STADIUM", // 경기장 준비중
+  PLAYERS_ENTERING = "PLAYERS_ENTERING", // 선수입장중
+  MATCH_STARTED = "MATCH_STARTED", // 경기 시작
+  SIMULATION_ACTIVE = "SIMULATION_ACTIVE", // 시뮬레이션 진행중
+  MATCH_ENDED = "MATCH_ENDED", // 경기 종료
+}
+
+export interface MatchEvent {
+  minute: number;
+  type: string;
+  team: "home" | "away";
+  playerName: string;
+  description: string;
+}
+
+export interface MatchStatistics {
+  possession: number;
+  shots: number;
+  shotsOnTarget: number;
+  corners: number;
+  fouls: number;
+  yellowCards: number;
+  redCards: number;
+  offsides: number;
+  passes: number;
+  passAccuracy: number;
+  tackles: number;
+}
+
+export interface MatchResult {
+  homeScore: number;
+  awayScore: number;
+  winner: "home" | "away" | "draw";
+}
+
+export interface MatchData {
+  id: string;
+  matchType: "quick" | "game";
+  homeTeam: {
+    userId: string;
+    squadId: string;
+    mmrBefore?: number;
+    mmrAfter?: number;
+  };
+  awayTeam: {
+    userId: string;
+    squadId: string;
+    mmrBefore?: number;
+    mmrAfter?: number;
+  };
+  result: MatchResult;
+  status: MatchStatus;
+  events?: MatchEvent[];
+  statistics?: {
+    home: MatchStatistics;
+    away: MatchStatistics;
+  };
+  aiAnalysis?: string;
+  createdAt?: Date;
+}

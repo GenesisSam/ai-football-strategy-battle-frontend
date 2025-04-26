@@ -153,11 +153,11 @@ interface PlayerConnection {
 
 interface SplashScreenProps {
   duration?: number;
-  onFinish: () => void;
+  onFinish?: () => void;
 }
 
 const SplashScreen: React.FC<SplashScreenProps> = ({
-  duration = 1800,
+  duration = 3000,
   onFinish,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
@@ -185,118 +185,117 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
   const connections = [
     { from: 0, to: 2 }, // GK to CB
     { from: 0, to: 3 }, // GK to CB
-    { from: 1, to: 2 }, // LB to CB
-    { from: 2, to: 3 }, // CB to CB
-    { from: 3, to: 4 }, // CB to RB
-    { from: 1, to: 5 }, // LB to LM
-    { from: 2, to: 6 }, // CB to CM
-    { from: 3, to: 6 }, // CB to CM
-    { from: 4, to: 7 }, // RB to RM
-    { from: 5, to: 6 }, // LM to CM
-    { from: 6, to: 7 }, // CM to RM
-    { from: 5, to: 8 }, // LM to LW
-    { from: 6, to: 9 }, // CM to ST
-    { from: 7, to: 10 }, // RM to RW
-    { from: 8, to: 9 }, // LW to ST
-    { from: 9, to: 10 }, // ST to RW
+    { from: 1, to: 2 },
+    { from: 2, to: 3 },
+    { from: 3, to: 4 },
+    { from: 1, to: 5 },
+    { from: 2, to: 6 },
+    { from: 3, to: 6 },
+    { from: 4, to: 7 },
+    { from: 5, to: 6 },
+    { from: 6, to: 7 },
+    { from: 5, to: 8 },
+    { from: 6, to: 9 },
+    { from: 7, to: 10 },
+    { from: 8, to: 9 },
+    { from: 9, to: 10 },
   ];
 
+  // 점진적인 포인트 애니메이션
   useEffect(() => {
-    // 선수 포인트 순차적 애니메이션
-    let delay = 150; // 첫 선수 등장까지 딜레이
+    const pointTimer = setTimeout(() => {
+      setPlayerPoints(positions);
+    }, 500);
 
-    positions.forEach((pos, index) => {
-      setTimeout(() => {
-        setPlayerPoints((prev) => [...prev, pos]);
-      }, delay + index * 60); // 각 선수마다 60ms 차이
-    });
+    // 연결선 애니메이션은 포인트 애니메이션 후에 시작
+    const lineTimer = setTimeout(() => {
+      setPlayerConnections(connections);
+    }, 800);
 
-    // 연결선 애니메이션 총 소요 시간 계산
-    const playerAnimationTime = delay + positions.length * 60;
-    const connectionAnimationTime = connections.length * 40;
-
-    // 선수 연결선 순차적 애니메이션
-    setTimeout(() => {
-      connections.forEach((conn, index) => {
-        setTimeout(() => {
-          setPlayerConnections((prev) => [...prev, conn]);
-        }, index * 40); // 각 연결선마다 40ms 차이
-      });
-    }, playerAnimationTime + 100); // 마지막 선수 등장 후 100ms 뒤 시작
-
-    // 모든 애니메이션(선수 + 연결선) 완료 후 500ms 동안 완성된 화면 유지 후 사라짐
-    const allAnimationTime =
-      playerAnimationTime + 100 + connectionAnimationTime;
-    const completedViewTime = 500; // 완성된 화면 감상 시간
-
-    // 전체 애니메이션 종료 후 스플래시 화면 숨김
-    const timer = setTimeout(() => {
+    // 스플래시 화면 사라지기
+    const hideTimer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(onFinish, 500); // 페이드 아웃
-    }, allAnimationTime + completedViewTime);
+    }, duration);
 
-    return () => clearTimeout(timer);
+    // 애니메이션 완료 후 콜백 함수 호출
+    const finishTimer = setTimeout(() => {
+      if (onFinish) {
+        onFinish();
+      }
+    }, duration + 500); // 페이드 아웃 시간 추가
+
+    // 타이머 클린업
+    return () => {
+      clearTimeout(pointTimer);
+      clearTimeout(lineTimer);
+      clearTimeout(hideTimer);
+      clearTimeout(finishTimer);
+    };
   }, [duration, onFinish]);
 
-  const getLineProps = (from: number, to: number) => {
-    // 연결선 위치 및 각도 계산
-    if (playerPoints.length <= Math.max(from, to)) return null;
-
+  // 두 포인트 사이의 선 스타일 계산
+  const calculateLineStyle = (from: number, to: number) => {
     const fromPos = positions[from];
     const toPos = positions[to];
 
-    const fromTop = parseFloat(fromPos.top) / 100;
-    const fromLeft = parseFloat(fromPos.left) / 100;
-    const toTop = parseFloat(toPos.top) / 100;
-    const toLeft = parseFloat(toPos.left) / 100;
+    // % 단위를 숫자로 변환
+    const fromTop = parseFloat(fromPos.top);
+    const fromLeft = parseFloat(fromPos.left);
+    const toTop = parseFloat(toPos.top);
+    const toLeft = parseFloat(toPos.left);
 
-    // 시작점과 끝점 좌표
-    const x1 = fromLeft;
-    const y1 = fromTop;
-    const x2 = toLeft;
-    const y2 = toTop;
+    // 각도 계산 (라디안)
+    const angleRad = Math.atan2(toTop - fromTop, toLeft - fromLeft);
+    // 각도를 도로 변환
+    const angleDeg = (angleRad * 180) / Math.PI;
 
-    // 길이 계산
-    const length = Math.sqrt(
-      Math.pow((x2 - x1) * 280, 2) + Math.pow((y2 - y1) * 400, 2)
+    // 두 점 사이의 거리 계산 (픽셀 기준이 아닌 % 비율)
+    const distance = Math.sqrt(
+      Math.pow(toLeft - fromLeft, 2) + Math.pow(toTop - fromTop, 2)
     );
 
-    // 각도 계산
-    const angle =
-      (Math.atan2((y2 - y1) * 400, (x2 - x1) * 280) * 180) / Math.PI;
-
     return {
-      width: `${length}px`,
-      top: `${fromTop * 100}%`,
-      left: `${fromLeft * 100}%`,
-      transform: `rotate(${angle}deg)`,
+      width: `${distance}%`,
+      height: "2px",
+      top: `${fromTop}%`,
+      left: `${fromLeft}%`,
+      transform: `rotate(${angleDeg}deg)`,
+      transformOrigin: "left center",
+      position: "absolute" as const,
+      backgroundColor: "rgba(255, 255, 255, 0.6)",
+      zIndex: 1,
+      animationDelay: `${0.8 + Math.random() * 0.5}s`,
     };
   };
 
   return (
     <SplashContainer isVisible={isVisible}>
+      <SplashTitle>AI 축구 전략 배틀</SplashTitle>
       <FootballField>
         <CenterCircle />
         <GoalArea className="top" />
         <GoalArea className="bottom" />
 
-        {/* 선수 포인트 */}
-        {playerPoints.map((pos, index) => (
+        {/* 선수 포지션 포인트 */}
+        {playerPoints.map((position, idx) => (
           <PlayerPoint
-            key={`player-${index}`}
-            style={{ top: pos.top, left: pos.left }}
+            key={`point-${idx}`}
+            style={{
+              top: position.top,
+              left: position.left,
+              animationDelay: `${0.5 + idx * 0.1}s`,
+            }}
           />
         ))}
 
         {/* 선수 연결선 */}
-        {playerConnections.map((conn, index) => {
-          const lineProps = getLineProps(conn.from, conn.to);
-          return lineProps ? (
-            <PlayerLine key={`line-${index}`} style={lineProps} />
-          ) : null;
-        })}
+        {playerConnections.map(({ from, to }, idx) => (
+          <PlayerLine
+            key={`line-${idx}`}
+            style={calculateLineStyle(from, to)}
+          />
+        ))}
       </FootballField>
-      <SplashTitle>AI 축구 전략 배틀</SplashTitle>
     </SplashContainer>
   );
 };

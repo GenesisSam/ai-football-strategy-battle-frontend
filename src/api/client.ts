@@ -27,6 +27,41 @@ export const apiClient = setupCache(axiosInstance, {
   },
 });
 
+// 인증된 API 요청을 위한 함수
+export const authFetch = async <T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> => {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${API_BASE_URL}${endpoint}`;
+  const token = localStorage.getItem("token");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const error = new Error(
+      errorData.message || `HTTP 오류 ${response.status}`
+    );
+    throw error;
+  }
+
+  return await response.json();
+};
+
 // 요청 인터셉터 설정 - JWT 토큰을 헤더에 추가
 apiClient.interceptors.request.use(
   (config) => {

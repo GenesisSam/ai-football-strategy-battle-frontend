@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import SplashScreen from "../components/SplashScreen";
 import { useSquad } from "../context/SquadContext";
 import { useAuth } from "../context/AuthContext";
+import { useMatch } from "../context/MatchContext";
 import AIStyleLoader from "../components/AIStyleLoader";
 
 const HomeContainer = styled.div`
@@ -72,6 +73,24 @@ const EditButton = styled(ActionButton)`
   }
 `;
 
+const QuickMatchButton = styled(ActionButton)`
+  background-color: ${({ theme }) => theme.colors.success};
+  color: white;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
+const GameMatchButton = styled(ActionButton)`
+  background-color: ${({ theme }) => theme.colors.secondary};
+  color: white;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
 const EmptyMessage = styled.p`
   color: ${({ theme }) => theme.colors.neutral};
   font-size: ${({ theme }) => theme.fonts.bodySize};
@@ -89,12 +108,28 @@ const Button = styled.button`
   cursor: pointer;
 `;
 
+const LoadingOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+`;
+
 const HomePage: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [startingMatch, setStartingMatch] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { startQuickMatch, startGameMatch, error: matchError } = useMatch();
 
   const {
     squads,
@@ -107,25 +142,67 @@ const HomePage: React.FC = () => {
     if (isAuthenticated) {
       fetchSquads();
     }
-  }, []);
+  }, [isAuthenticated, fetchSquads]);
 
   const handleSplashFinish = useCallback(() => {
     setShowSplash(false);
   }, []);
 
-  const handleItemClick = useCallback((strategyId: string) => {
-    if (expandedItemId === strategyId) {
-      setExpandedItemId(null);
-    } else {
-      setExpandedItemId(strategyId);
-    }
-  }, []);
+  const handleItemClick = useCallback(
+    (strategyId: string) => {
+      if (expandedItemId === strategyId) {
+        setExpandedItemId(null);
+      } else {
+        setExpandedItemId(strategyId);
+      }
+    },
+    [expandedItemId]
+  );
 
   const handleEditClick = useCallback(
     (squadId: string) => {
       navigate(`/strategy/${squadId}`);
     },
     [navigate]
+  );
+
+  // 빠른 대전 시작
+  const handleQuickMatchClick = useCallback(
+    async (squadId: string) => {
+      try {
+        setStartingMatch(true);
+        activateExistingSquad(squadId);
+        const matchId = await startQuickMatch(squadId);
+        if (matchId) {
+          navigate(`/match/${matchId}`);
+        }
+      } catch (error) {
+        console.error("빠른 대전 시작 실패:", error);
+      } finally {
+        setStartingMatch(false);
+      }
+    },
+    [startQuickMatch, navigate, activateExistingSquad]
+  );
+
+  // 게임 대전 시작
+  const handleGameMatchClick = useCallback(
+    async (squadId: string) => {
+      try {
+        setStartingMatch(true);
+        activateExistingSquad(squadId);
+        const jobId = await startGameMatch(squadId);
+        if (jobId) {
+          setActiveJobId(jobId);
+          navigate(`/match/job/${jobId}`);
+        }
+      } catch (error) {
+        console.error("게임 대전 시작 실패:", error);
+      } finally {
+        setStartingMatch(false);
+      }
+    },
+    [startGameMatch, navigate, activateExistingSquad]
   );
 
   if (isAuthLoading || (isAuthenticated && isSquadLoading)) {
@@ -143,10 +220,21 @@ const HomePage: React.FC = () => {
     );
   }
 
+  // 활성 작업이 있으면 해당 작업 페이지로 바로 이동
+  if (activeJobId) {
+    navigate(`/match/job/${activeJobId}`);
+    return null;
+  }
+
   return (
     <>
       {showSplash && (
         <SplashScreen duration={1500} onFinish={handleSplashFinish} />
+      )}
+      {startingMatch && (
+        <LoadingOverlay>
+          <AIStyleLoader statusText="매치 준비 중..." />
+        </LoadingOverlay>
       )}
       <HomeContainer>
         {isAuthenticated ? (
@@ -172,6 +260,22 @@ const HomePage: React.FC = () => {
                       >
                         수정
                       </EditButton>
+                      <QuickMatchButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickMatchClick(squad._id);
+                        }}
+                      >
+                        빠른 대전
+                      </QuickMatchButton>
+                      <GameMatchButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGameMatchClick(squad._id);
+                        }}
+                      >
+                        게임 대전
+                      </GameMatchButton>
                     </StrategyActions>
                   )}
                 </StrategyItem>
