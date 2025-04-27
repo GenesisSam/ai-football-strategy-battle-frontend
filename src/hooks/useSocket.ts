@@ -1,160 +1,193 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Socket } from "socket.io-client";
-import { createSocketConnection, subscribeToMatch } from "../api/socket";
-import debounce from "lodash/debounce";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import io, { Socket } from "socket.io-client";
+import { getToken } from "../utils/authUtils"; // 수정된 경로: utils/auth -> utils/authUtils
 
-let SOCKET_INIT_STATE = false;
+const API_URL = "http://localhost:3000";
 
-/**
- * 매치 웹소켓 연결을 관리하는 훅
- *
- * - 자동 연결 및 재연결 처리
- * - 매치 구독 자동 처리
- * - 연결 상태 및 에러 관리
- */
-export function useSocket(matchId?: string) {
+interface UseSocketReturn {
+  socket: Socket | null;
+  isConnected: boolean;
+  connect: () => void;
+  disconnect: () => void;
+  reconnect: () => void;
+  error?: string;
+}
+
+export const useSocket = (): UseSocketReturn => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
-  const reconnectAttemptsRef = useRef<number>(0);
-  const maxReconnectAttempts = 5;
-  const reconnectIntervalRef = useRef<number | null>(null);
+  const connectAttempts = useRef<number>(0);
+  const reconnectPromise = useRef<Promise<void> | null>(null);
 
-  // 로그 헬퍼 함수
-  const log = useCallback((message: string, data?: unknown) => {
-    console.log(`[useSocket] ${message}`, data || "");
-  }, []);
-
-  // 수동 재연결 시작
-  const startReconnecting = useCallback(() => {
-    if (reconnectIntervalRef.current) {
-      clearInterval(reconnectIntervalRef.current);
+  // 소켓 연결 함수
+  const connect = useCallback(() => {
+    // 이미 연결이 시도 중이면 중복 연결 방지
+    if (socketRef.current) {
+      console.log("[Socket] Connection already exists, skipping connect");
+      return;
     }
 
-    reconnectIntervalRef.current = setInterval(() => {
-      // 최대 시도 횟수 초과시 중단
-      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-        if (reconnectIntervalRef.current) {
-          clearInterval(reconnectIntervalRef.current);
-          reconnectIntervalRef.current = null;
-        }
-        setError(
-          "최대 재연결 시도 횟수를 초과했습니다. 페이지를 새로고침 해주세요."
-        );
-        log("최대 재연결 시도 횟수 초과");
+    try {
+      // 토큰 가져오기
+      const token = getToken();
+      if (!token) {
+        console.error("[Socket] No auth token available");
         return;
       }
 
-      if (!isConnected && socketRef.current) {
-        reconnectAttemptsRef.current++;
-        log(
-          `재연결 시도 중... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-        );
-        socketRef.current.connect();
-      }
-    }, 2000); // 2초마다 재연결 시도
-  }, [isConnected, log]);
+      console.log("[Socket] Creating new connection");
 
-  // 소켓 연결 함수
-  const connectImpl = useCallback(() => {
-    try {
-      // 기존 재연결 인터벌이 있다면 정리
-      if (reconnectIntervalRef.current) {
-        clearInterval(reconnectIntervalRef.current);
-        reconnectIntervalRef.current = null;
-      }
+      // 새 소켓 연결 생성
+      socketRef.current = io(API_URL, {
+        transports: ["websocket", "polling"], // 서버와 동일하게 설정
+        reconnection: true, // 자동 재연결 활성화
+        reconnectionAttempts: 5, // 최대 5번 재시도
+        reconnectionDelay: 1000, // 1초 대기 후 재시도
+        timeout: 10000, // 10초 타임아웃
+        auth: { token }, // 인증 토큰 포함
+      });
 
-      log("소켓 연결 시작");
-      socketRef.current = createSocketConnection();
-
-      // 연결 이벤트 핸들러
+      // 연결 이벤트 리스너
       socketRef.current.on("connect", () => {
-        log("소켓 연결됨", { id: socketRef.current?.id });
+        console.log("[Socket] Connected");
         setIsConnected(true);
-        setError(null);
-        reconnectAttemptsRef.current = 0;
-
-        // matchId가 있으면 자동 구독
-        if (matchId && socketRef.current) {
-          subscribeToMatch(socketRef.current, matchId);
-        }
+        connectAttempts.current = 0; // 연결 시도 횟수 리셋
       });
 
-      // 연결 끊김 이벤트 핸들러
+      // 연결 끊김 이벤트 리스너
       socketRef.current.on("disconnect", (reason) => {
-        log("소켓 연결 끊김", { reason });
+        console.log(`[Socket] Disconnected: ${reason}`);
         setIsConnected(false);
-
-        // 자동 재연결이 작동하지 않는 경우에만 수동 재연결 시도
-        if (
-          reason === "io server disconnect" ||
-          reason === "io client disconnect"
-        ) {
-          // 서버에서 연결을 끊은 경우 수동 재연결
-          startReconnecting();
-        }
       });
 
-      // 연결 오류 이벤트 핸들러
-      socketRef.current.on("connect_error", (err) => {
-        log("연결 오류 발생", { error: err.message });
-        setIsConnected(false);
-        setError(`연결 오류: ${err.message}`);
-
-        // socket.io의 내장 재연결 매커니즘 외에 추가적인 재연결 처리
-        startReconnecting();
+      // 재연결 이벤트 리스너
+      socketRef.current.on("reconnect", (attemptNumber) => {
+        console.log(`[Socket] Reconnected after ${attemptNumber} attempts`);
+        setIsConnected(true);
       });
 
-      return socketRef.current;
-    } catch (err) {
-      const errMessage =
-        err instanceof Error ? err.message : "알 수 없는 소켓 오류";
-      log("소켓 초기화 오류", { error: errMessage });
-      setError(`소켓 초기화 오류: ${errMessage}`);
+      // 재연결 시도 이벤트 리스너
+      socketRef.current.on("reconnect_attempt", (attemptNumber) => {
+        console.log(`[Socket] Reconnection attempt ${attemptNumber}`);
+      });
+
+      // 재연결 실패 이벤트 리스너
+      socketRef.current.on("reconnect_failed", () => {
+        console.error("[Socket] Reconnection failed");
+      });
+
+      // 연결 에러 이벤트 리스너
+      socketRef.current.on("connect_error", (error) => {
+        console.error(`[Socket] Connection error: ${error.message}`, error);
+        setIsConnected(false);
+      });
+
+      // 에러 이벤트 리스너
+      socketRef.current.on("error", (error) => {
+        console.error(`[Socket] Error: ${error.message}`, error);
+      });
+
+      // 인증 이벤트 리스너
+      socketRef.current.on("authenticated", (data) => {
+        console.log("[Socket] Authentication successful", data);
+      });
+    } catch (error) {
+      console.error("[Socket] Failed to connect:", error);
+      socketRef.current = null;
       setIsConnected(false);
-      return null;
     }
-  }, [matchId, log, startReconnecting]);
+  }, []);
 
-  // lodash의 debounce를 사용하여 300ms 지연을 적용한 connect 함수
-  const connect = useMemo(
-    () =>
-      debounce(() => {
-        connectImpl();
-      }, 300),
-    [connectImpl]
-  );
-
-  // 소켓 연결 해제 함수
+  // 소켓 연결 끊기 함수
   const disconnect = useCallback(() => {
     if (socketRef.current) {
-      log("소켓 연결 해제");
+      console.log("[Socket] Disconnecting");
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setIsConnected(false);
+    }
+  }, []);
+
+  // 소켓 재연결 함수
+  const reconnect = useCallback(() => {
+    // 이미 연결되어 있으면 건너뛰기
+    if (isConnected && socketRef.current?.connected) {
+      console.log("[Socket] Already connected, skipping reconnect");
+      return Promise.resolve();
+    }
+
+    // 이미 재연결 시도 중이면 중복 재연결 방지
+    if (reconnectPromise.current) {
+      console.log("[Socket] Reconnection already in progress");
+      return reconnectPromise.current;
+    }
+
+    // 연결 시도 횟수 증가
+    connectAttempts.current += 1;
+    console.log(`[Socket] Reconnect attempt ${connectAttempts.current}`);
+
+    // 연결 끊기
+    if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
 
-    if (reconnectIntervalRef.current) {
-      clearInterval(reconnectIntervalRef.current);
-      reconnectIntervalRef.current = null;
-    }
+    // 새 연결 시도
+    const promise = new Promise<void>((resolve) => {
+      // 연결 시도
+      connect();
 
-    setIsConnected(false);
-  }, [log]);
+      // 연결 대기
+      if (socketRef.current) {
+        // 이미 연결됐거나 연결 성공 시
+        if (socketRef.current.connected) {
+          console.log("[Socket] Successfully reconnected (already connected)");
+          resolve();
+        } else {
+          // 연결 대기
+          socketRef.current.once("connect", () => {
+            console.log("[Socket] Successfully reconnected");
+            resolve();
+          });
 
+          // 타임아웃 설정
+          setTimeout(() => {
+            if (!socketRef.current?.connected) {
+              console.log("[Socket] Reconnect timed out");
+              resolve();
+            }
+          }, 5000); // 5초 타임아웃
+        }
+      } else {
+        resolve();
+      }
+    }).finally(() => {
+      reconnectPromise.current = null; // 프로미스 초기화
+    });
+
+    reconnectPromise.current = promise;
+    return promise;
+  }, [connect, isConnected]);
+
+  // 컴포넌트 언마운트 시 연결 정리
   useEffect(() => {
-    if (!socketRef.current && !SOCKET_INIT_STATE) {
-      log("소켓 연결 시도");
-      connect.cancel();
-      SOCKET_INIT_STATE = true; // 초기화 완료 플래그 설정
-      connect(); // 초기 연결은 debounce 없이 직접 호출
-    }
-  }, [connect, log]);
+    return () => {
+      if (socketRef.current) {
+        console.log("[Socket] Cleaning up socket connection");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, []);
+
+  // 소켓 객체와 상태 메모이제이션
+  const socket = useMemo(() => socketRef.current, [isConnected]);
 
   return {
-    socket: socketRef.current,
+    socket,
     isConnected,
-    error,
-    reconnect: connect,
+    connect,
     disconnect,
+    reconnect,
   };
-}
+};

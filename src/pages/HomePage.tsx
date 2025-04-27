@@ -299,7 +299,7 @@ const HomePage: React.FC = memo(() => {
           height: "100vh",
         }}
       >
-        <AIStyleLoader />
+        <div>loading...</div>
       </div>
     ),
     []
@@ -320,11 +320,7 @@ const HomePage: React.FC = memo(() => {
       {showSplash && (
         <SplashScreen duration={1500} onFinish={handleSplashFinish} />
       )}
-      {startingMatch && (
-        <LoadingOverlay>
-          <AIStyleLoader />
-        </LoadingOverlay>
-      )}
+      {startingMatch && <LoadingOverlay>...</LoadingOverlay>}
       <HomeContainer>
         {isAuthenticated ? (
           <StrategyList>

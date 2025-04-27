@@ -1,9 +1,7 @@
 import axios from "axios";
-import { setupCache } from "axios-cache-interceptor";
 
 // API 기본 URL 설정 (환경에 따라 변경될 수 있음)
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+const API_BASE_URL = "http://localhost:3000/api";
 
 // Axios 인스턴스 생성
 const axiosInstance = axios.create({

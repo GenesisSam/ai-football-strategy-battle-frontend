@@ -11,7 +11,7 @@ import { useMatch } from "../../context/MatchContext";
 import { useAuth } from "../../context/AuthContext";
 import { MatchData, MatchStatus } from "../../types/global.d";
 import { getMatchStatus } from "../../api/match";
-import { useSocket } from "../../hooks/useSocket";
+import { useSocket } from "../../hooks/useSocket"; // 소켓 연결 다시 활성화
 import { shareMatch } from "../../api/match";
 
 import {
@@ -68,8 +68,8 @@ const MatchPage: React.FC = () => {
     error?: string;
   }>({ loading: false });
 
-  // useSocket 훅을 사용하여 웹소켓 연결 관리
-  const { socket, isConnected, error: socketError } = useSocket(matchId);
+  // socket 연결 다시 활성화
+  const { socket, isConnected, error: socketError } = useSocket();
 
   // interval을 useRef로 관리하여 불필요한 리렌더링 방지
   const pollingIntervalRef = useRef<number | null>(null);
@@ -116,7 +116,7 @@ const MatchPage: React.FC = () => {
     }
   }, []);
 
-  // 웹소켓 이벤트 처리
+  // 웹소켓 이벤트 처리 - 다시 활성화
   useEffect(() => {
     if (!socket || !matchId) return;
 
@@ -174,17 +174,24 @@ const MatchPage: React.FC = () => {
     return cleanupListeners;
   }, [socket, matchId, loadMatchDetails, stopPolling]);
 
-  // 매치 진행 상태 폴링 함수 개선 - 웹소켓이 연결되지 않은 경우에만 폴링
+  // 매치 진행 상태 폴링 함수 - 웹소켓 연결 상태에 따라 폴링 여부 결정
   useEffect(() => {
-    // 웹소켓이 연결되어 있거나, 작업 ID가 있거나, 이미 결과 표시 중이면 폴링 불필요
-    if (isConnected || jobId || showResults) {
+    // 작업 ID가 있거나, 이미 결과 표시 중이면 폴링 불필요
+    if (jobId || showResults) {
       stopPolling();
       return;
     }
 
-    // matchId가 있고 폴링이 필요한 경우
-    if (matchId && !isConnected) {
-      logMatchPage("웹소켓 연결 없음, 매치 상태 폴링 시작", { matchId });
+    // 웹소켓이 연결되어 있으면 폴링 중지
+    if (isConnected && socket) {
+      logMatchPage("웹소켓 연결됨, 폴링 중지");
+      stopPolling();
+      return;
+    }
+
+    // matchId가 있는 경우 API 폴링으로 매치 상태 확인
+    if (matchId) {
+      logMatchPage("매치 상태 폴링 시작", { matchId });
 
       const pollMatchStatus = async () => {
         try {
@@ -220,7 +227,7 @@ const MatchPage: React.FC = () => {
       // 초기 상태 확인
       pollMatchStatus();
 
-      // 5초마다 상태 확인 (poll)
+      // 5초마다 상태 확인 (poll) - 웹소켓이 연결되지 않았을 때만
       if (!pollingIntervalRef.current) {
         logMatchPage("매치 상태 폴링 간격 설정", { interval: 5000 });
         pollingIntervalRef.current = setInterval(
@@ -233,7 +240,15 @@ const MatchPage: React.FC = () => {
     }
 
     return undefined;
-  }, [matchId, jobId, showResults, loadMatchDetails, stopPolling, isConnected]);
+  }, [
+    matchId,
+    jobId,
+    showResults,
+    loadMatchDetails,
+    stopPolling,
+    isConnected,
+    socket,
+  ]);
 
   // 매치 공유 기능
   const handleShareMatch = useCallback(async () => {
@@ -481,8 +496,7 @@ const MatchPage: React.FC = () => {
 
             {socketError && (
               <ErrorMessage>
-                웹소켓 연결 오류: {socketError}. 실시간 업데이트가 제한될 수
-                있습니다.
+                {socketError}. API 폴링을 통해 매치 상태를 확인합니다.
               </ErrorMessage>
             )}
           </ResultContainer>
