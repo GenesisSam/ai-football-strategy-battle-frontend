@@ -1,12 +1,14 @@
 import axios from "axios";
-
-// API 기본 URL 설정 (환경에 따라 변경될 수 있음)
-const API_BASE_URL = "http://localhost:3000/api";
+import {
+  API_BASE_URL,
+  REQUEST_CONFIG,
+  AUTH_STORAGE_KEYS,
+} from "../constants/api.constants";
 
 // Axios 인스턴스 생성
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: REQUEST_CONFIG.TIMEOUT,
   headers: {
     "Content-Type": "application/json",
   },
@@ -23,7 +25,7 @@ export const authFetch = async <T>(
   const url = endpoint.startsWith("http")
     ? endpoint
     : `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem(AUTH_STORAGE_KEYS.TOKEN);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -34,26 +36,47 @@ export const authFetch = async <T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(
-      errorData.message || `HTTP 오류 ${response.status}`
-    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error: any = new Error(
+        errorData.message || `HTTP 오류 ${response.status}`
+      );
+
+      // 에러 객체에 HTTP 상태 코드와 응답 데이터 추가
+      error.status = response.status;
+      error.statusText = response.statusText;
+      error.data = errorData;
+
+      console.error(`[API Error] ${endpoint}:`, {
+        status: response.status,
+        message: error.message,
+        data: errorData,
+      });
+
+      throw error;
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`[API Fetch Error] ${endpoint}:`, error.message);
+    } else {
+      console.error(`[API Unknown Error] ${endpoint}:`, error);
+    }
     throw error;
   }
-
-  return await response.json();
 };
 
 // 요청 인터셉터 설정 - JWT 토큰을 헤더에 추가
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem(AUTH_STORAGE_KEYS.TOKEN);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -81,8 +104,10 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        // 1.5초 대기 후 요청 재시도
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // 재시도 전 지연
+        await new Promise((resolve) =>
+          setTimeout(resolve, REQUEST_CONFIG.RETRY_DELAY)
+        );
         return await axios(originalRequest);
       } catch (retryError) {
         console.error("재시도 실패:", retryError);
@@ -95,8 +120,8 @@ apiClient.interceptors.response.use(
       // URL이 인증 관련 엔드포인트인 경우 리다이렉트를 하지 않음
       const requestUrl = error.config?.url;
       if (!authUrls.some((authUrl) => requestUrl?.includes(authUrl))) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        localStorage.removeItem(AUTH_STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(AUTH_STORAGE_KEYS.USER);
         // 로그인 페이지로 리다이렉트 또는 인증 상태 갱신 처리
         window.location.href = "/";
       }

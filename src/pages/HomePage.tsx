@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import SplashScreen from "../components/SplashScreen";
 import { useSquad } from "../context/SquadContext";
 import { useAuth } from "../context/AuthContext";
 import { useMatch } from "../context/MatchContext";
-import AIStyleLoader from "../components/AIStyleLoader";
+
+// 로그 헬퍼 함수
+const logHomePage = (action: string, data?: any) => {
+  console.log(`[HomePage] ${action}`, data || "");
+};
 
 const HomeContainer = styled.div`
   display: flex;
@@ -226,12 +231,11 @@ const HomePage: React.FC = memo(() => {
   const [showSplash, setShowSplash] = useState(true);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [startingMatch, setStartingMatch] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [loadingSquadId, setLoadingSquadId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { startQuickMatch, startGameMatch, error: matchError } = useMatch();
+  const { startGameMatch } = useMatch();
 
   const {
     squads,
@@ -272,18 +276,34 @@ const HomePage: React.FC = memo(() => {
         await activateExistingSquad(squadId);
 
         // 게임 대전 시작 - 서버에 전략 전달
-        const jobId = await startGameMatch(squadId);
+        const matchId = await startGameMatch(squadId);
 
-        if (jobId) {
+        logHomePage("게임 매치 ID 확인", { matchId, type: typeof matchId });
+
+        if (matchId) {
           // 작업 ID 저장 및 매치 페이지로 이동
-          setActiveJobId(jobId);
-          navigate(`/match/job/${jobId}`);
+          logHomePage("게임 매치 생성 성공", { matchId });
+          // 매치 페이지로 이동
+          navigate(`/match/${matchId}`);
+        } else {
+          logHomePage("매치 ID가 유효하지 않음", { matchId });
+          toast.error(
+            "매치 생성은 되었으나 매치 ID가 유효하지 않습니다. 다시 시도해주세요."
+          );
         }
-      } catch (error) {
-        console.error("게임 대전 시작 실패:", error);
-      } finally {
+      } catch (error: any) {
+        logHomePage("게임 매치 생성 실패", error);
+        toast.error(
+          `게임 대전 시작에 실패했습니다: ${
+            error?.message || "알 수 없는 오류"
+          }`
+        );
         setStartingMatch(false);
-        setLoadingSquadId(null); // 로딩 상태 초기화
+        setLoadingSquadId(null);
+      } finally {
+        // 에러 발생 시에도 로딩 상태 해제
+        setStartingMatch(false);
+        setLoadingSquadId(null);
       }
     },
     [startGameMatch, navigate, activateExistingSquad]
@@ -307,12 +327,6 @@ const HomePage: React.FC = memo(() => {
 
   if (isAuthLoading || (isAuthenticated && isSquadLoading)) {
     return loadingComponent;
-  }
-
-  // 활성 작업이 있으면 해당 작업 페이지로 바로 이동
-  if (activeJobId) {
-    navigate(`/match/job/${activeJobId}`);
-    return null;
   }
 
   return (

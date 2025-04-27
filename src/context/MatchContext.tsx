@@ -4,247 +4,93 @@ import React, {
   useContext,
   ReactNode,
   useCallback,
-  useMemo,
-  useEffect,
 } from "react";
-import * as matchApi from "../api/match";
-import { MatchData } from "../types/global";
-import { useSocket } from "../hooks/useSocket";
-import { subscribeToMatchJob, unsubscribeFromMatchJob } from "../api/socket";
 
-// 로그 헬퍼 함수
-const logMatch = (action: string, data?: any) => {
+import {
+  createQuickMatch,
+  createGameMatch,
+  getMatchById,
+  cancelMatchRequest,
+} from "../api/match";
+
+import { MatchData } from "../types/global.d";
+import { useAuth } from "./AuthContext";
+
+// 매치 컨텍스트 인터페이스
+interface MatchContextType {
+  matches: MatchData[];
+  activeMatch: MatchData | null;
+  isLoading: boolean;
+  isPolling: boolean;
+  error: string | null;
+  getMatchDetails: (id: string) => Promise<MatchData | null>;
+  startQuickMatch: (squadId: string) => Promise<string>;
+  startGameMatch: (squadId: string) => Promise<string>;
+  cancelMatch: (matchId: string) => Promise<boolean>;
+  stopPolling: () => void;
+  getErrorMessage: (error: any) => string;
+}
+
+// 초기 컨텍스트 값
+const initialMatchContext: MatchContextType = {
+  matches: [],
+  activeMatch: null,
+  isLoading: false,
+  isPolling: false,
+  error: null,
+  getMatchDetails: async () => null,
+  startQuickMatch: async () => "",
+  startGameMatch: async () => "",
+  cancelMatch: async () => false,
+  stopPolling: () => {},
+  getErrorMessage: () => "",
+};
+
+// 매치 컨텍스트 생성
+export const MatchContext =
+  createContext<MatchContextType>(initialMatchContext);
+
+// 로깅 헬퍼 함수
+const logMatchContext = (action: string, data?: any) => {
   console.log(`[MatchContext] ${action}`, data || "");
 };
 
-// 작업 상태 인터페이스
-interface JobStatus {
-  status: "pending" | "processing" | "completed" | "failed";
-  progress?: number;
-  result?: any;
-  error?: string;
-}
-
-// 매치 컨텍스트 인터페이스 정의
-interface MatchContextType {
-  isLoading: boolean;
-  error: string | null;
-  jobStatus: Record<string, JobStatus>;
-  currentJobId: string | null;
-  startQuickMatch: (squadId: string) => Promise<MatchData | null>;
-  startGameMatch: (squadId: string) => Promise<string | null>;
-  getMatchDetails: (matchId: string) => Promise<MatchData | null>;
-  subscribeToJob: (jobId: string) => void;
-  unsubscribeFromJob: (jobId?: string) => void;
-  clearError: () => void;
-}
-
-// 매치 컨텍스트 생성
-const MatchContext = createContext<MatchContextType | undefined>(undefined);
-
-// 매치 컨텍스트 프로바이더 props 인터페이스
+// 매치 컨텍스트 제공자 인터페이스
 interface MatchProviderProps {
   children: ReactNode;
 }
 
-// 매치 컨텍스트 프로바이더 컴포넌트
+// 매치 컨텍스트 제공자 컴포넌트
 export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
+  const [matches, setMatches] = useState<MatchData[]>([]);
+  const [activeMatch, setActiveMatch] = useState<MatchData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<Record<string, JobStatus>>({});
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const { socket, isConnected, connect } = useSocket();
-
-  // 소켓 연결 설정 및 이벤트 리스너 등록
-  useEffect(() => {
-    if (!isConnected && !socket) {
-      connect();
-    }
-
-    if (socket) {
-      // 작업 상태 업데이트 이벤트 리스너 (백지화됨)
-      socket.on("match:jobUpdate", (data: { jobId: string } & JobStatus) => {
-        const { jobId, ...status } = data;
-        logMatch("작업 상태 업데이트 (백지화된 기능)", { jobId, status });
-
-        // 기본적인 상태 업데이트만 제공
-        setJobStatus((prevState) => ({
-          ...prevState,
-          [jobId]: {
-            status: "processing",
-            progress: 0.5, // 항상 50%로 고정
-          },
-        }));
-      });
-
-      // 작업 에러 이벤트 리스너 (백지화됨)
-      socket.on("match:jobError", (data: { jobId: string; error: string }) => {
-        logMatch("작업 에러 (백지화된 기능)", data);
-        setJobStatus((prevState) => ({
-          ...prevState,
-          [data.jobId]: {
-            ...prevState[data.jobId],
-            status: "failed",
-            error:
-              "작업 처리 중 오류가 발생했습니다. 현재 작업 추적 기능은 완전히 구현되지 않았습니다.",
-          },
-        }));
-      });
-
-      return () => {
-        socket.off("match:jobUpdate");
-        socket.off("match:jobError");
-      };
-    }
-  }, [socket, isConnected, connect]);
-
-  // 에러 초기화 함수
-  const clearError = useCallback(() => {
-    logMatch("에러 초기화");
-    setError(null);
-  }, []);
-
-  // 특정 작업 구독 (백지화됨)
-  const subscribeToJob = useCallback(
-    (jobId: string) => {
-      logMatch("작업 구독 (백지화된 기능)", { jobId });
-
-      if (socket && isConnected) {
-        setCurrentJobId(jobId);
-        // 서버에 구독 요청은 유지하되, 백엔드에서는 제대로 처리되지 않음
-        subscribeToMatchJob(socket, jobId);
-
-        // 백지화된 기능이므로 임의의 처리 중 상태로 설정
-        setJobStatus((prevState) => ({
-          ...prevState,
-          [jobId]: {
-            status: "processing",
-            progress: 0.5, // 항상 50%로 고정
-          },
-        }));
-      } else {
-        logMatch("작업 구독 실패 - 소켓 연결 없음", { jobId });
-      }
-    },
-    [socket, isConnected]
-  );
-
-  // 작업 구독 취소 (백지화됨)
-  const unsubscribeFromJob = useCallback(
-    (jobId?: string) => {
-      const idToUnsubscribe = jobId || currentJobId;
-
-      if (!idToUnsubscribe) return;
-
-      logMatch("작업 구독 취소 (백지화된 기능)", { jobId: idToUnsubscribe });
-
-      if (socket && isConnected) {
-        unsubscribeFromMatchJob(socket, idToUnsubscribe);
-
-        if (currentJobId === idToUnsubscribe) {
-          setCurrentJobId(null);
-        }
-      }
-    },
-    [socket, isConnected, currentJobId]
-  );
-
-  // 빠른 매치 시작 함수
-  const startQuickMatch = useCallback(
-    async (squadId: string): Promise<MatchData | null> => {
-      logMatch("빠른 매치 시작", { squadId });
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const match = await matchApi.createQuickMatch(squadId);
-        logMatch("빠른 매치 생성 완료", { matchId: match.id });
-        return match;
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "빠른 매치를 시작하는 중 오류가 발생했습니다.";
-        logMatch("빠른 매치 시작 오류", { error: errorMessage });
-        setError(errorMessage);
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
-
-  // 게임 대전 시작 (백지화됨)
-  const startGameMatch = useCallback(
-    async (squadId: string): Promise<string | null> => {
-      logMatch("게임 매치 시작 (백지화된 기능)", { squadId });
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // API 호출은 유지하되, 결과는 백엔드에서 제대로 처리되지 않음
-        const { jobId } = await matchApi.createGameMatch(squadId);
-        logMatch("게임 매치 작업 생성 완료 (백지화된 기능)", { jobId });
-
-        if (jobId) {
-          // 임의의 작업 상태 설정
-          setJobStatus({
-            [jobId]: {
-              status: "processing",
-              progress: 0.5, // 항상 50%로 고정
-            },
-          });
-
-          setCurrentJobId(jobId);
-
-          // 작업 생성 후 자동으로 구독 (실제로는 제대로 동작하지 않음)
-          if (socket && isConnected) {
-            subscribeToJob(jobId);
-          }
-        }
-
-        return jobId;
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "게임 매치를 시작하는 중 오류가 발생했습니다. (현재 이 기능은 완전히 구현되지 않았습니다)";
-        logMatch("게임 매치 시작 오류 (백지화된 기능)", {
-          error: errorMessage,
-        });
-        setError(errorMessage);
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [socket, isConnected, subscribeToJob]
-  );
+  const { isAuthenticated } = useAuth();
 
   // 매치 상세 정보 조회
   const getMatchDetails = useCallback(
-    async (matchId: string): Promise<MatchData | null> => {
-      logMatch("매치 상세 정보 조회", { matchId });
-      try {
-        setIsLoading(true);
-        setError(null);
+    async (id: string): Promise<MatchData | null> => {
+      if (!id) {
+        logMatchContext("매치 상세 조회 실패", "ID가 없습니다");
+        return null;
+      }
 
-        const match = await matchApi.getMatchById(matchId);
-        logMatch("매치 상세 정보 조회 성공", {
-          matchId,
-          status: match.status,
-          homeScore: match.result?.homeScore,
-          awayScore: match.result?.awayScore,
-        });
-        return match;
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "매치 정보를 불러오는 중 오류가 발생했습니다.";
-        logMatch("매치 상세 정보 조회 오류", { matchId, error: errorMessage });
-        setError(errorMessage);
+      setIsLoading(true);
+      setError(null);
+      try {
+        const matchDetails = await getMatchById(id);
+        logMatchContext("매치 상세 조회 성공", matchDetails);
+
+        if (matchDetails) {
+          setActiveMatch(matchDetails);
+        }
+
+        return matchDetails;
+      } catch (err: any) {
+        logMatchContext("매치 상세 조회 실패", err);
+        setError(`매치 상세 조회 실패: ${err.message || "알 수 없는 오류"}`);
         return null;
       } finally {
         setIsLoading(false);
@@ -253,53 +99,136 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     []
   );
 
-  // 컴포넌트 언마운트시 구독 취소
-  useEffect(() => {
-    return () => {
-      if (currentJobId && socket) {
-        unsubscribeFromJob(currentJobId);
-      }
-    };
-  }, [currentJobId, socket, unsubscribeFromJob]);
+  // 빠른 대전 시작
+  const startQuickMatch = useCallback(
+    async (squadId: string): Promise<string> => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        logMatchContext("빠른 대전 시작", { squadId });
+        const response = await createQuickMatch(squadId);
 
-  // 컨텍스트 값 메모이제이션
-  const value = useMemo(
-    () => ({
-      isLoading,
-      error,
-      jobStatus,
-      currentJobId,
-      startQuickMatch,
-      startGameMatch,
-      getMatchDetails,
-      subscribeToJob,
-      unsubscribeFromJob,
-      clearError,
-    }),
-    [
-      isLoading,
-      error,
-      jobStatus,
-      currentJobId,
-      startQuickMatch,
-      startGameMatch,
-      getMatchDetails,
-      subscribeToJob,
-      unsubscribeFromJob,
-      clearError,
-    ]
+        // id가 있거나 _id가 있는 경우 모두 처리
+        const matchId = response?.id || response?._id;
+
+        if (matchId) {
+          logMatchContext("빠른 대전 생성 성공", { matchId });
+          return matchId;
+        }
+
+        throw new Error("매치 ID를 받지 못했습니다");
+      } catch (err: any) {
+        logMatchContext("빠른 대전 시작 실패", err);
+        setError(`빠른 대전 시작 실패: ${err.message || "알 수 없는 오류"}`);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
   );
+
+  // 게임 대전 시작
+  const startGameMatch = useCallback(
+    async (squadId: string): Promise<string> => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        logMatchContext("게임 대전 시작", { squadId });
+        const response = await createGameMatch(squadId);
+
+        // id가 있거나 _id가 있는 경우 모두 처리
+        const matchId = response?.id || response?._id;
+
+        if (matchId) {
+          logMatchContext("게임 대전 생성 성공", { matchId });
+          return matchId;
+        }
+
+        throw new Error("매치 ID를 받지 못했습니다");
+      } catch (err: any) {
+        logMatchContext("게임 대전 시작 실패", err);
+        setError(`게임 대전 시작 실패: ${err.message || "알 수 없는 오류"}`);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  // 폴링 중지
+  const stopPolling = useCallback(() => {
+    setIsPolling(false);
+    logMatchContext("폴링 중지");
+  }, []);
+
+  // 에러 메시지 생성 함수
+  const getErrorMessage = useCallback((error: any): string => {
+    if (!error) return "알 수 없는 오류가 발생했습니다.";
+
+    if (error.status === 401) {
+      return "인증이 필요합니다. 다시 로그인해주세요.";
+    } else if (error.status === 403) {
+      return "이 작업을 수행할 권한이 없습니다.";
+    } else if (error.status === 404) {
+      return "요청한 매치를 찾을 수 없습니다.";
+    } else if (error.status >= 500) {
+      return "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+    }
+
+    return error.message || "알 수 없는 오류가 발생했습니다.";
+  }, []);
+
+  // 매치 취소 함수 추가
+  const cancelMatch = useCallback(
+    async (matchId: string): Promise<boolean> => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        logMatchContext("매치 취소 시도", { matchId });
+        const response = await cancelMatchRequest(matchId);
+
+        if (response && response.success) {
+          logMatchContext("매치 취소 성공", { matchId });
+          return true;
+        }
+
+        throw new Error("매치 취소에 실패했습니다");
+      } catch (err: any) {
+        logMatchContext("매치 취소 실패", err);
+        setError(`매치 취소 실패: ${getErrorMessage(err)}`);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [getErrorMessage]
+  );
+
+  // 컨텍스트 값
+  const contextValue: MatchContextType = {
+    matches,
+    activeMatch,
+    isLoading,
+    isPolling,
+    error,
+    getMatchDetails,
+    startQuickMatch,
+    startGameMatch,
+    cancelMatch,
+    stopPolling,
+    getErrorMessage,
+  };
 
   return (
-    <MatchContext.Provider value={value}>{children}</MatchContext.Provider>
+    <MatchContext.Provider value={contextValue}>
+      {children}
+    </MatchContext.Provider>
   );
 };
 
-// 매치 컨텍스트 훅
-export const useMatch = (): MatchContextType => {
-  const context = useContext(MatchContext);
-  if (context === undefined) {
-    throw new Error("useMatch must be used within a MatchProvider");
-  }
-  return context;
-};
+// 매치 컨텍스트 사용 훅
+export const useMatch = () => useContext(MatchContext);
+
+export default MatchProvider;

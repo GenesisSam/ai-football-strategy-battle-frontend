@@ -66,24 +66,31 @@ export interface MatchData {
   homeTeam: {
     userId: string;
     squadId: string;
+    name?: string;
+    formation?: string;
     mmrBefore?: number;
     mmrAfter?: number;
   };
   awayTeam: {
     userId: string;
     squadId: string;
+    name?: string;
+    formation?: string;
     mmrBefore?: number;
     mmrAfter?: number;
   };
   result: MatchResult;
   status: MatchStatus;
   events?: MatchEvent[];
+  logs?: any[]; // 매치 로그
   statistics?: {
     home: MatchStatistics;
     away: MatchStatistics;
   };
   aiAnalysis?: string;
+  analysis?: string; // 매치 분석 텍스트
   createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface MatchJobStatusResponse {

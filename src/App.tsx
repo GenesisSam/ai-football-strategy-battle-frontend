@@ -59,15 +59,7 @@ const App = memo(() => {
                     }
                   />
                   <Route
-                    path="match/:matchId"
-                    element={
-                      <Suspense fallback={<SplashScreen />}>
-                        <MatchPage />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="match/job/:jobId"
+                    path="match/:id"
                     element={
                       <Suspense fallback={<SplashScreen />}>
                         <MatchPage />

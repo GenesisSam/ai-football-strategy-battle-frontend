@@ -4,520 +4,584 @@ import React, {
   useCallback,
   useRef,
   useMemo,
-  Suspense,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import styled, { useTheme } from "styled-components";
+import { toast } from "react-toastify";
 import { useMatch } from "../../context/MatchContext";
-import { useAuth } from "../../context/AuthContext";
-import { MatchData, MatchStatus } from "../../types/global.d";
-import { getMatchStatus } from "../../api/match";
-import { useSocket } from "../../hooks/useSocket";
-// shareMatch 함수 import 제거
-// JobStatusTracker 컴포넌트 추가
-import JobStatusTracker from "../../components/JobStatusTracker";
+import AIStyleLoader from "../../components/AIStyleLoader";
+import { MatchStatus, MatchData, MatchEvent } from "../../types/global.d";
+import {
+  getMatchEvents,
+  getMatchStatus,
+  getMatchLogs,
+  shouldStopPolling,
+} from "../../api/match";
+
+import { EVENT_TYPE_COLORS, LAYOUT } from "../../constants/ui.constants";
+
+import { POLLING, STATUS_MESSAGES } from "../../constants/match.constants";
 
 import {
-  LoadingIndicator,
-  MatchContainer,
-  ResultContainer,
-  Title,
-  ScoreBoard,
-  TeamInfo,
-  TeamName,
-  Score,
-  Versus,
-  ResultMessage,
-  StatsSection,
-  StatsTitle,
-  StatsList,
-  StatLabel,
-  HomeStat,
-  AwayStat,
-  AnalysisSection,
-  EventsSection,
-  EventsList,
-  EventItem,
-  EventMinute,
-  EventType,
-  EventDescription,
-  Buttons,
-  Button,
-  ErrorMessage,
-} from "./styled";
+  CONFIRM_MESSAGES,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from "../../constants/messages.constants";
 
-// 로그 헬퍼 함수
+// 로깅 헬퍼 함수
 const logMatchPage = (action: string, data?: any) => {
   console.log(`[MatchPage] ${action}`, data || "");
 };
 
-// AIStyleLoader를 지연 로딩으로 변경
-const AIStyleLoader = React.lazy(
-  () => import("../../components/AIStyleLoader")
-);
+// 컨테이너 스타일
+const MatchContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+`;
 
-const MatchPage: React.FC = () => {
-  const { jobId, matchId } = useParams();
+// 매치 헤더 스타일
+const MatchHeader = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+// 매치 결과 컨테이너 스타일
+const MatchResultContainer = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: ${({ theme }) => theme.colors.light};
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+`;
+
+// 스코어보드 스타일
+const Scoreboard = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 20px;
+  background-color: ${({ theme }) => theme.colors.background};
+  border-radius: 8px;
+  margin-bottom: 20px;
+`;
+
+// 팀 정보 스타일
+const TeamInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+`;
+
+// 스코어 스타일
+const Score = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 2.5rem;
+  font-weight: bold;
+  padding: 0 20px;
+`;
+
+// 로그 컨테이너 스타일
+const LogsContainer = styled.div`
+  width: 100%;
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: ${({ theme }) => theme.colors.background};
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 20px;
+`;
+
+// 로그 아이템 스타일
+const LogItem = styled.div<{ $eventType?: string }>`
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background-color: ${({ $eventType }) =>
+    $eventType === "goal"
+      ? EVENT_TYPE_COLORS.GOAL
+      : $eventType === "card"
+      ? EVENT_TYPE_COLORS.CARD
+      : $eventType === "injury"
+      ? EVENT_TYPE_COLORS.INJURY
+      : "transparent"};
+`;
+
+// 매치 통계 스타일
+const StatisticsContainer = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+`;
+
+// 통계 행 스타일
+const StatRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+`;
+
+// 통계 라벨 스타일
+const StatLabel = styled.div`
+  flex: 1;
+  text-align: center;
+`;
+
+// 통계 값 스타일
+const StatValue = styled.div`
+  flex: 1;
+  text-align: center;
+  font-weight: bold;
+`;
+
+// 통계 바 컨테이너 스타일
+const StatBarContainer = styled.div`
+  flex: 2;
+  height: 12px;
+  background-color: #f1f1f1;
+  border-radius: 6px;
+  overflow: hidden;
+`;
+
+// 통계 바 스타일
+const StatBar = styled.div<{ $width: string; $isHome: boolean }>`
+  height: 100%;
+  width: ${({ $width }) => $width};
+  background-color: ${({ theme, $isHome }) =>
+    $isHome ? theme.colors.primary : theme.colors.secondary};
+`;
+
+// 버튼 스타일
+const Button = styled.button`
+  padding: 10px 20px;
+  background-color: ${({ theme }) => theme.colors.primary};
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 20px;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primaryDark};
+  }
+
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.neutral};
+    cursor: not-allowed;
+  }
+`;
+
+// 취소 버튼 스타일
+const CancelButton = styled(Button)`
+  background-color: ${({ theme }) => theme.colors.danger || "#dc3545"};
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.dangerDark || "#c82333"};
+  }
+`;
+
+// 버튼 컨테이너 스타일
+const ButtonContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 20px;
+`;
+
+interface MatchPageProps {}
+
+const MatchPage: React.FC<MatchPageProps> = () => {
+  // 라우터 파라미터 및 네비게이션
+  const { id: matchId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { getMatchDetails, error } = useMatch();
+  const theme = useTheme();
 
+  // 상태 관리
   const [loading, setLoading] = useState<boolean>(true);
-  const [match, setMatch] = useState<MatchData | null>(null);
-  const [showResults, setShowResults] = useState<boolean>(false);
-  const [sharingStatus, setSharingStatus] = useState<{
-    loading: boolean;
-    url?: string;
-    error?: string;
-  }>({ loading: false });
+  const [matchData, setMatchData] = useState<MatchData | null>(null);
+  const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
-  // socket 연결 다시 활성화
-  const { socket, isConnected, error: socketError } = useSocket();
+  // refs
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingErrorCountRef = useRef<number>(0);
+  const refLoading = useRef<boolean>(false);
 
-  // interval을 useRef로 관리하여 불필요한 리렌더링 방지
-  const pollingIntervalRef = useRef<number | null>(null);
+  // Match 컨텍스트
+  const {
+    getMatchDetails,
+    cancelMatch,
+    getErrorMessage,
+    stopPolling: contextStopPolling,
+  } = useMatch();
 
-  logMatchPage("컴포넌트 초기화", {
-    jobId,
-    matchId,
-    socketConnected: isConnected,
-  });
-
-  // 매치 세부 정보 로딩 함수를 useCallback으로 메모이제이션
+  // 매치 상세 정보 로드 (컨텍스트 함수 활용)
   const loadMatchDetails = useCallback(async () => {
     if (!matchId) return;
 
     try {
-      logMatchPage("매치 상세 정보 로딩 시작", { matchId });
-      setLoading(true);
-      const matchData = await getMatchDetails(matchId);
-      if (matchData) {
-        logMatchPage("매치 상세 정보 로드 성공", {
-          matchId,
-          status: matchData.status,
-          homeScore: matchData.result?.homeScore,
-          awayScore: matchData.result?.awayScore,
-        });
-        setMatch(matchData);
-        setShowResults(true);
+      logMatchPage("매치 상세 정보 로드 시작", { matchId });
+      const matchDetails = await getMatchDetails(matchId);
+
+      if (matchDetails) {
+        setMatchData(matchDetails);
+        logMatchPage("매치 상세 정보 로드 완료", matchDetails);
       } else {
+        setError("매치 정보를 찾을 수 없습니다.");
         logMatchPage("매치 상세 정보 없음", { matchId });
       }
-    } catch (err) {
-      logMatchPage("매치 상세 정보 로드 실패", { matchId, error: err });
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      logMatchPage("매치 상세 정보 로드 실패", err);
+      setError(`매치 정보를 불러오는데 실패했습니다: ${getErrorMessage(err)}`);
+      toast.error("매치 정보를 불러오는데 실패했습니다.");
     }
-  }, [matchId, getMatchDetails]);
+  }, [matchId, getMatchDetails, getErrorMessage]);
 
-  // 폴링 중지 함수를 별도로 분리하여 코드 재사용성 향상
+  // 매치 이벤트 및 로그 로드
+  const loadMatchEventsAndLogs = useCallback(async () => {
+    if (!matchId) return;
+
+    try {
+      // 이벤트 로드
+      const matchEvents = await getMatchEvents(matchId);
+      if (matchEvents) {
+        setEvents(matchEvents);
+        logMatchPage("매치 이벤트 로드 완료", { count: matchEvents.length });
+      }
+
+      // 로그 로드
+      const matchLogs = await getMatchLogs(matchId);
+      if (matchLogs) {
+        setLogs(matchLogs);
+        logMatchPage("매치 로그 로드 완료", { count: matchLogs.length });
+      }
+    } catch (err) {
+      logMatchPage("매치 이벤트/로그 로드 실패", err);
+    }
+  }, [matchId]);
+
+  // 폴링 중지 - 컨텍스트의 stopPolling 함수와 통합
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
-      logMatchPage("폴링 중지");
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
-  }, []);
+    setIsPolling(false);
+    contextStopPolling(); // 컨텍스트의 폴링 중지 함수도 호출
+    logMatchPage("폴링 중지됨");
+  }, [contextStopPolling]);
 
-  // 웹소켓 이벤트 처리 - 다시 활성화
-  useEffect(() => {
-    if (!socket || !matchId) return;
+  // 매치 상태 폴링 시작
+  const startPolling = useCallback(() => {
+    if (!matchId || pollingIntervalRef.current) return;
 
-    // 이벤트 핸들러 정리
-    const cleanupListeners = () => {
-      logMatchPage("웹소켓 이벤트 리스너 정리");
-      socket.off("match:statusUpdate");
-      socket.off("match:event");
-      socket.off("match:end");
-    };
+    logMatchPage("폴링 시작", { matchId });
+    setIsPolling(true);
 
-    // 기존 리스너 제거로 중복 등록 방지
-    cleanupListeners();
+    // 폴링 간격 사용
+    const pollMatchStatus = async () => {
+      try {
+        // 매치 상태 조회
+        const statusResponse = await getMatchStatus(matchId);
+        logMatchPage("매치 상태 응답", statusResponse);
 
-    // 매치 상태 변경 이벤트 핸들러
-    const handleStatusChange = (data: any) => {
-      if (data.matchId === matchId) {
-        logMatchPage("웹소켓으로 매치 상태 업데이트 수신", data);
+        // 매치가 종료되면 결과 페이지로 전환
+        if (shouldStopPolling(statusResponse.status)) {
+          logMatchPage("매치 종료 감지", { matchId });
+          await loadMatchDetails();
+          stopPolling();
+        }
+        // 각 상태에 따라 적절히 처리
+        else if (
+          statusResponse.status === MatchStatus.IN_PROGRESS ||
+          statusResponse.status === MatchStatus.STARTED
+        ) {
+          logMatchPage("매치 진행 중", {
+            matchId,
+            status: statusResponse.status,
+          });
+          setLoading(false); // 로딩 상태 해제
+        }
+      } catch (err) {
+        logMatchPage("매치 상태 조회 실패", { matchId, error: err });
 
-        // 매치가 종료되면 완료 처리
-        if (data.status === MatchStatus.ENDED) {
-          logMatchPage("웹소켓으로 매치 종료 감지", { matchId });
-          loadMatchDetails();
+        // 오류 카운트 증가
+        pollingErrorCountRef.current += 1;
+
+        // 연속 5회 이상 오류 발생 시 메시지 표시
+        if (pollingErrorCountRef.current >= POLLING.MAX_ERROR_COUNT) {
+          toast.error(ERROR_MESSAGES.MATCH.CONNECTION_ERROR);
           stopPolling();
         }
       }
     };
 
-    // 매치 이벤트 수신 핸들러
-    const handleMatchEvent = (data: any) => {
-      if (data.matchId === matchId) {
-        logMatchPage("웹소켓으로 매치 이벤트 수신", data);
-        // 필요시 이벤트를 상태에 반영하는 로직 추가
-      }
-    };
+    // 첫 번째 폴링 즉시 실행
+    pollMatchStatus();
 
-    // 매치 종료 이벤트 핸들러
-    const handleMatchEnd = (data: any) => {
-      if (data.matchId === matchId) {
-        logMatchPage("웹소켓으로 매치 종료 이벤트 수신", data);
-        loadMatchDetails();
-        stopPolling();
-      }
-    };
+    // 폴링 인터벌 설정
+    pollingIntervalRef.current = setInterval(pollMatchStatus, POLLING.INTERVAL);
 
-    // 올바른 이벤트 이름으로 리스너 등록
-    socket.on("match:statusUpdate", handleStatusChange);
-    socket.on("match/event", handleMatchEvent);
-    socket.on("match/end", handleMatchEnd);
-
-    // 매치 구독 요청
-    socket.emit("match:join", { matchId });
-
-    // 정리 함수
-    return cleanupListeners;
-  }, [socket, matchId, loadMatchDetails, stopPolling]);
-
-  // 매치 진행 상태 폴링 함수 - 웹소켓 연결 상태에 따라 폴링 여부 결정
-  useEffect(() => {
-    // 작업 ID가 있거나, 이미 결과 표시 중이면 폴링 불필요
-    if (jobId || showResults) {
-      stopPolling();
-      return;
-    }
-
-    // 웹소켓이 연결되어 있으면 폴링 중지
-    if (isConnected && socket) {
-      logMatchPage("웹소켓 연결됨, 폴링 중지");
-      stopPolling();
-      return;
-    }
-
-    // matchId가 있는 경우 API 폴링으로 매치 상태 확인
-    if (matchId) {
-      logMatchPage("매치 상태 폴링 시작", { matchId });
-
-      const pollMatchStatus = async () => {
-        try {
-          const statusResponse = await getMatchStatus(matchId);
-          logMatchPage("매치 상태 폴링 응답", {
-            matchId,
-            status: statusResponse.status,
-            message: statusResponse.message,
-          });
-
-          // 매치가 종료되면 결과 페이지로 전환
-          if (statusResponse.status === MatchStatus.ENDED) {
-            logMatchPage("매치 종료 감지", { matchId });
-            loadMatchDetails();
-            stopPolling();
-          }
-          // 각 상태에 따라 적절히 처리
-          else if (
-            statusResponse.status === MatchStatus.IN_PROGRESS ||
-            statusResponse.status === MatchStatus.STARTED
-          ) {
-            logMatchPage("매치 진행 중", {
-              matchId,
-              status: statusResponse.status,
-            });
-            setLoading(false); // 로딩 상태 해제
-          }
-        } catch (err) {
-          logMatchPage("매치 상태 조회 실패", { matchId, error: err });
-        }
-      };
-
-      // 초기 상태 확인
-      pollMatchStatus();
-
-      // 5초마다 상태 확인 (poll) - 웹소켓이 연결되지 않았을 때만
-      if (!pollingIntervalRef.current) {
-        logMatchPage("매치 상태 폴링 간격 설정", { interval: 5000 });
-        pollingIntervalRef.current = setInterval(
-          pollMatchStatus,
-          5000
-        ) as unknown as number;
-      }
-
-      return stopPolling;
-    }
-
-    return undefined;
-  }, [
-    matchId,
-    jobId,
-    showResults,
-    loadMatchDetails,
-    stopPolling,
-    isConnected,
-    socket,
-  ]);
-
-  // 매치 공유 기능 - 백지화
-  const handleShareMatch = useCallback(async () => {
-    if (!match) return;
-
-    try {
-      setSharingStatus({ loading: true });
-      logMatchPage("매치 결과 공유 요청 (백지화된 기능)", {
-        matchId: match.id,
-      });
-
-      // 백지화된 기능임을 알리는 메시지
-      setTimeout(() => {
-        setSharingStatus({ loading: false });
-        alert("매치 결과 공유 기능은 현재 구현되지 않았습니다.");
-      }, 500);
-    } catch (err) {
-      const errorMsg = "매치 공유 기능은 현재 구현되지 않았습니다.";
-      logMatchPage("매치 공유 시도 (백지화된 기능)", { error: errorMsg });
-      setSharingStatus({ loading: false, error: errorMsg });
-      alert(errorMsg);
-    }
-  }, [match]);
-
-  // 기존 매치 ID가 있을 때 결과 로딩
-  useEffect(() => {
-    if (matchId && !jobId) {
-      // 매치 ID가 있으면 바로 결과 가져오기
-      logMatchPage("초기 매치 정보 로딩", { matchId });
-      loadMatchDetails();
-    }
-  }, [matchId, jobId, loadMatchDetails]);
-
-  // 폴링 중지 처리
-  useEffect(() => {
-    if (showResults) {
-      logMatchPage("결과 표시 모드로 전환", { matchId });
-      stopPolling();
-    }
-  }, [showResults, stopPolling]);
-
-  // 컴포넌트 언마운트 시 폴링 정리
-  useEffect(() => {
     return () => {
-      logMatchPage("컴포넌트 언마운트");
       stopPolling();
     };
-  }, [stopPolling]);
+  }, [matchId, loadMatchDetails, stopPolling]);
 
-  const handleMatchComplete = useCallback(
-    (completedMatchId: string) => {
-      // 매치 완료 후 결과 페이지로 이동하기만 하고 loadMatchDetails는 useEffect에서 처리
-      logMatchPage("매치 완료 처리", { completedMatchId });
-      navigate(`/match/${completedMatchId}`, { replace: true });
-      // loadMatchDetails는 useEffect에서 URL 변경 이후에 자동으로 호출됨
-    },
-    [navigate]
-  );
-
-  const handleReturnHome = useCallback(() => {
-    logMatchPage("메인으로 돌아가기");
+  // 홈페이지로 이동 - 메모이제이션 추가
+  const handleGoHome = useCallback(() => {
     navigate("/");
   }, [navigate]);
 
-  const handleReplay = useCallback(() => {
-    if (match) {
-      // 단순히 showResults를 false로 설정하는 대신 현재 페이지로 새로 이동
-      logMatchPage("매치 다시보기", { matchId: match.id });
-      navigate(`/match/${match.id}`, { replace: true });
-      // 페이지를 다시 로드하여 모든 상태를 초기화
-      window.location.reload();
-    }
-  }, [match, navigate]);
+  // 컴포넌트 마운트 시 매치 정보 로드 및 폴링 시작 - 클린업 함수 개선
+  useEffect(() => {
+    if (matchId && !refLoading.current) {
+      refLoading.current = true;
 
-  // 렌더링 조건을 useMemo로 최적화하여 불필요한 계산 방지
-  const renderContent = useMemo(() => {
-    logMatchPage("화면 렌더링 계산", {
-      jobId,
-      matchId,
-      loading,
-      showResults,
-      hasMatch: !!match,
-      hasError: !!error,
-    });
+      // 매치 정보 로드
+      loadMatchDetails()
+        .then(() => {
+          // 매치 상태 폴링 시작
+          startPolling();
 
-    // jobId가 있으면 JobStatusTracker를 통해 매치 작업 상태 표시
-    if (jobId) {
-      return (
-        <MatchContainer>
-          <Title>매치 생성 중</Title>
-          <JobStatusTracker jobId={jobId} onComplete={handleMatchComplete} />
-        </MatchContainer>
-      );
+          // 매치 이벤트 및 로그 로드
+          loadMatchEventsAndLogs();
+
+          setLoading(false);
+          refLoading.current = false;
+        })
+        .catch(() => {
+          refLoading.current = false;
+          setLoading(false);
+        });
     }
 
-    // 에러 발생 시
-    if (error) {
-      return (
-        <MatchContainer>
-          <ErrorMessage>{error}</ErrorMessage>
-          <Buttons>
-            <Button onClick={handleReturnHome}>메인으로 돌아가기</Button>
-          </Buttons>
-        </MatchContainer>
-      );
-    }
-
-    // 매치 ID가 있고, 로딩 중이면 로딩 인디케이터 표시
-    if (matchId && loading) {
-      return <LoadingIndicator>로딩 중...</LoadingIndicator>;
-    }
-
-    // 매치를 찾을 수 없는 경우
-    if (!match && !loading) {
-      return (
-        <MatchContainer>
-          <ErrorMessage>매치 정보를 찾을 수 없습니다.</ErrorMessage>
-          <Buttons>
-            <Button onClick={handleReturnHome}>메인으로 돌아가기</Button>
-          </Buttons>
-        </MatchContainer>
-      );
-    }
-
-    if (match) {
-      const isUserHomeTeam = user?.id === match.homeTeam.userId;
-      const userWon =
-        (isUserHomeTeam && match.result.winner === "home") ||
-        (!isUserHomeTeam && match.result.winner === "away");
-      const isDraw = match.result.winner === "draw";
-
-      let resultMessage = "";
-      if (isDraw) {
-        resultMessage = "무승부입니다!";
-      } else if (userWon) {
-        resultMessage = "축하합니다! 승리했습니다!";
-      } else {
-        resultMessage = "아쉽게도 패배했습니다.";
-      }
-
-      return (
-        <MatchContainer>
-          <Title>
-            {match.matchType === "quick" ? "빠른 대전" : "게임 대전"} 결과
-          </Title>
-
-          <ResultContainer>
-            {/* 기존 결과 표시 UI 유지 */}
-            <ScoreBoard>
-              <TeamInfo>
-                <TeamName>{isUserHomeTeam ? "나의 팀" : "상대 팀"}</TeamName>
-              </TeamInfo>
-              <Score>{match.result.homeScore}</Score>
-              <Versus>vs</Versus>
-              <Score>{match.result.awayScore}</Score>
-              <TeamInfo>
-                <TeamName>{isUserHomeTeam ? "상대 팀" : "나의 팀"}</TeamName>
-              </TeamInfo>
-            </ScoreBoard>
-
-            <ResultMessage>{resultMessage}</ResultMessage>
-
-            {/* 통계 및 분석 결과 렌더링 */}
-            {match.statistics && (
-              <StatsSection>
-                <StatsTitle>경기 통계</StatsTitle>
-                <StatsList>
-                  <HomeStat>{match.statistics.home.possession}%</HomeStat>
-                  <StatLabel>점유율</StatLabel>
-                  <AwayStat>{match.statistics.away.possession}%</AwayStat>
-
-                  <HomeStat>{match.statistics.home.shots}</HomeStat>
-                  <StatLabel>슈팅</StatLabel>
-                  <AwayStat>{match.statistics.away.shots}</AwayStat>
-
-                  <HomeStat>{match.statistics.home.shotsOnTarget}</HomeStat>
-                  <StatLabel>유효 슈팅</StatLabel>
-                  <AwayStat>{match.statistics.away.shotsOnTarget}</AwayStat>
-
-                  <HomeStat>{match.statistics.home.passes}</HomeStat>
-                  <StatLabel>패스</StatLabel>
-                  <AwayStat>{match.statistics.away.passes}</AwayStat>
-
-                  <HomeStat>{match.statistics.home.passAccuracy}%</HomeStat>
-                  <StatLabel>패스 정확도</StatLabel>
-                  <AwayStat>{match.statistics.away.passAccuracy}%</AwayStat>
-
-                  <HomeStat>{match.statistics.home.corners}</HomeStat>
-                  <StatLabel>코너킥</StatLabel>
-                  <AwayStat>{match.statistics.away.corners}</AwayStat>
-
-                  <HomeStat>{match.statistics.home.fouls}</HomeStat>
-                  <StatLabel>파울</StatLabel>
-                  <AwayStat>{match.statistics.away.fouls}</AwayStat>
-                </StatsList>
-              </StatsSection>
-            )}
-
-            {match.aiAnalysis && (
-              <AnalysisSection>
-                <StatsTitle>AI 분석</StatsTitle>
-                <div>
-                  {match.aiAnalysis.split("\n").map((line, i) => (
-                    <p key={i}>{line}</p>
-                  ))}
-                </div>
-              </AnalysisSection>
-            )}
-
-            {match.events && match.events.length > 0 && (
-              <EventsSection>
-                <StatsTitle>주요 장면</StatsTitle>
-                <EventsList>
-                  {match.events
-                    .filter((event) => event.type === "goal")
-                    .map((event, index) => (
-                      <EventItem key={index} team={event.team}>
-                        <EventMinute>{event.minute}'</EventMinute>
-                        <EventType>
-                          {event.type === "goal" ? "⚽ 골!" : event.type}
-                        </EventType>
-                        <EventDescription>{event.description}</EventDescription>
-                      </EventItem>
-                    ))}
-                </EventsList>
-              </EventsSection>
-            )}
-
-            <Buttons>
-              <Button onClick={handleReturnHome}>메인으로 돌아가기</Button>
-              <Button onClick={handleReplay}>다시 보기</Button>
-              <Button
-                onClick={handleShareMatch}
-                disabled={sharingStatus.loading}
-              >
-                {sharingStatus.loading ? "공유 중..." : "결과 공유하기"}
-              </Button>
-            </Buttons>
-
-            {socketError && (
-              <ErrorMessage>
-                {socketError}. API 폴링을 통해 매치 상태를 확인합니다.
-              </ErrorMessage>
-            )}
-          </ResultContainer>
-        </MatchContainer>
-      );
-    }
-
-    return null;
+    // 컴포넌트 언마운트 시 폴링 중지 및 리소스 정리
+    return () => {
+      stopPolling();
+      pollingErrorCountRef.current = 0;
+      refLoading.current = false;
+    };
   }, [
-    jobId,
     matchId,
-    loading,
-    showResults,
-    match,
-    error,
-    socketError,
-    user,
-    sharingStatus.loading,
-    handleMatchComplete,
-    handleReturnHome,
-    handleReplay,
-    handleShareMatch,
+    loadMatchDetails,
+    loadMatchEventsAndLogs,
+    startPolling,
+    stopPolling,
   ]);
 
-  return renderContent;
+  // 매치 통계 표시 여부 - 메모이제이션 추가
+  const showStatistics = useMemo(
+    () => Boolean(matchData && matchData.statistics),
+    [matchData]
+  );
+
+  // 매치가 끝났는지 여부 - 메모이제이션 추가
+  const isMatchFinished = useMemo(
+    () => matchData?.status === MatchStatus.ENDED,
+    [matchData?.status]
+  );
+
+  // 로딩 중이거나 매치 정보가 없으면 AIStyleLoader 표시
+  if (loading || !matchData) {
+    return <MatchContainer>... loading</MatchContainer>;
+  }
+
+  // 에러가 있으면 에러 메시지 표시
+  if (error) {
+    return (
+      <MatchContainer>
+        <h2>오류 발생</h2>
+        <p>{error}</p>
+        <Button onClick={handleGoHome}>홈으로 돌아가기</Button>
+      </MatchContainer>
+    );
+  }
+
+  // 매치 취소 핸들러
+  const handleCancelMatch = async () => {
+    if (!matchId) return;
+
+    if (window.confirm(CONFIRM_MESSAGES.MATCH.CANCEL_CONFIRM)) {
+      setIsCancelling(true);
+      try {
+        const success = await cancelMatch(matchId);
+        if (success) {
+          // 폴링 중지
+          stopPolling();
+
+          toast.success(SUCCESS_MESSAGES.MATCH.CANCEL_SUCCESS);
+          navigate("/");
+        } else {
+          toast.error(ERROR_MESSAGES.MATCH.CANCEL_FAILED);
+        }
+      } catch (err: any) {
+        toast.error(
+          `매치 취소 중 오류가 발생했습니다: ${getErrorMessage(err)}`
+        );
+        logMatchPage("매치 취소 오류", err);
+      } finally {
+        setIsCancelling(false);
+      }
+    }
+  };
+
+  return (
+    <MatchContainer>
+      <MatchHeader>
+        <h1>매치 {isMatchFinished ? "결과" : "진행중"}</h1>
+        <Button onClick={handleGoHome}>홈으로</Button>
+      </MatchHeader>
+
+      {/* 매치가 아직 진행 중이면 AIStyleLoader와 취소 버튼 표시 */}
+      {!isMatchFinished ? (
+        <>
+          <AIStyleLoader matchId={matchId} onMatchComplete={loadMatchDetails} />
+          <ButtonContainer>
+            <CancelButton onClick={handleCancelMatch} disabled={isCancelling}>
+              {isCancelling ? "취소 중..." : "매치 취소하기"}
+            </CancelButton>
+          </ButtonContainer>
+        </>
+      ) : (
+        <MatchResultContainer>
+          {/* 스코어보드 */}
+          <Scoreboard>
+            <TeamInfo>
+              <h3>{matchData.homeTeam?.name || "홈팀"}</h3>
+              <p>{matchData.homeTeam?.formation || "-"}</p>
+            </TeamInfo>
+            <Score>
+              {matchData.result?.homeScore || 0} -{" "}
+              {matchData.result?.awayScore || 0}
+            </Score>
+            <TeamInfo>
+              <h3>{matchData.awayTeam?.name || "어웨이팀"}</h3>
+              <p>{matchData.awayTeam?.formation || "-"}</p>
+            </TeamInfo>
+          </Scoreboard>
+
+          {/* 로그 표시 */}
+          {logs && logs.length > 0 && (
+            <>
+              <h3>경기 로그</h3>
+              <LogsContainer>
+                {logs.map((log, index) => (
+                  <LogItem key={index} $eventType={log.eventType}>
+                    <strong>{log.minute}'</strong> - {log.description}
+                  </LogItem>
+                ))}
+              </LogsContainer>
+            </>
+          )}
+
+          {/* 통계 표시 */}
+          {showStatistics && (
+            <StatisticsContainer>
+              <h3>경기 통계</h3>
+
+              <StatRow>
+                <StatValue>
+                  {matchData.statistics?.home?.possession || 0}%
+                </StatValue>
+                <StatLabel>점유율</StatLabel>
+                <StatValue>
+                  {matchData.statistics?.away?.possession || 0}%
+                </StatValue>
+              </StatRow>
+              <StatBarContainer>
+                <StatBar
+                  $width={`${matchData.statistics?.home?.possession || 0}%`}
+                  $isHome={true}
+                />
+              </StatBarContainer>
+
+              <StatRow>
+                <StatValue>{matchData.statistics?.home?.shots || 0}</StatValue>
+                <StatLabel>슈팅</StatLabel>
+                <StatValue>{matchData.statistics?.away?.shots || 0}</StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>
+                  {matchData.statistics?.home?.shotsOnTarget || 0}
+                </StatValue>
+                <StatLabel>유효 슈팅</StatLabel>
+                <StatValue>
+                  {matchData.statistics?.away?.shotsOnTarget || 0}
+                </StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>{matchData.statistics?.home?.passes || 0}</StatValue>
+                <StatLabel>패스</StatLabel>
+                <StatValue>{matchData.statistics?.away?.passes || 0}</StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>
+                  {matchData.statistics?.home?.passAccuracy || 0}%
+                </StatValue>
+                <StatLabel>패스 정확도</StatLabel>
+                <StatValue>
+                  {matchData.statistics?.away?.passAccuracy || 0}%
+                </StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>{matchData.statistics?.home?.fouls || 0}</StatValue>
+                <StatLabel>파울</StatLabel>
+                <StatValue>{matchData.statistics?.away?.fouls || 0}</StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>
+                  {matchData.statistics?.home?.corners || 0}
+                </StatValue>
+                <StatLabel>코너킥</StatLabel>
+                <StatValue>
+                  {matchData.statistics?.away?.corners || 0}
+                </StatValue>
+              </StatRow>
+              <StatRow>
+                <StatValue>
+                  {matchData.statistics?.home?.yellowCards || 0} /{" "}
+                  {matchData.statistics?.home?.redCards || 0}
+                </StatValue>
+                <StatLabel>경고 / 퇴장</StatLabel>
+                <StatValue>
+                  {matchData.statistics?.away?.yellowCards || 0} /{" "}
+                  {matchData.statistics?.away?.redCards || 0}
+                </StatValue>
+              </StatRow>
+            </StatisticsContainer>
+          )}
+
+          {/* 매치 분석 결과가 있다면 표시 */}
+          {matchData.analysis && (
+            <>
+              <h3>매치 분석</h3>
+              <div style={{ margin: "10px 0", lineHeight: "1.6" }}>
+                {matchData.analysis}
+              </div>
+            </>
+          )}
+        </MatchResultContainer>
+      )}
+    </MatchContainer>
+  );
 };
 
 export default MatchPage;
