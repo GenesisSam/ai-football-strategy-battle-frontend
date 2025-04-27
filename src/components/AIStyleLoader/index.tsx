@@ -7,7 +7,7 @@ import React, {
 } from "react";
 
 import { useSocket } from "../../hooks/useSocket";
-import { MatchStatus } from "../../types/global.d";
+import { MatchStatus, JobDetailStatus } from "../../types/global.d";
 import { getMatchStatus, getMatchById } from "../../api/match";
 import {
   LoaderContainer,
@@ -24,26 +24,52 @@ import {
   LogMessage,
 } from "./styled";
 
+// 상태 메시지 맵 타입 정의
+type StatusMessagesType = {
+  [key in MatchStatus | JobDetailStatus]: string;
+};
+
+// 진행률 맵 타입 정의
+type ProgressMapType = {
+  [key in MatchStatus | JobDetailStatus]: number;
+};
+
 // 매치 상태에 따른 메시지 맵
-const STATUS_MESSAGES = {
-  [MatchStatus.MATCHMAKING]: "매치메이킹 중입니다...",
-  [MatchStatus.OPPONENT_FOUND]: "대결 상대를 찾았습니다!",
-  [MatchStatus.PREPARING_STADIUM]: "경기장을 준비하고 있습니다...",
-  [MatchStatus.PLAYERS_ENTERING]: "선수들이 입장하고 있습니다...",
-  [MatchStatus.MATCH_STARTED]: "경기가 시작되었습니다!",
-  [MatchStatus.SIMULATION_ACTIVE]: "AI가 시뮬레이션 중입니다...",
-  [MatchStatus.MATCH_ENDED]: "경기가 종료되었습니다.",
+const STATUS_MESSAGES: StatusMessagesType = {
+  // 매치 상태
+  [MatchStatus.CREATED]: "매치가 생성되었습니다.",
+  [MatchStatus.STARTED]: "매치가 시작되었습니다!",
+  [MatchStatus.IN_PROGRESS]: "매치가 진행 중입니다.",
+  [MatchStatus.ENDED]: "매치가 종료되었습니다.",
+
+  // 작업 상세 상태
+  [JobDetailStatus.MATCHMAKING]: "매치메이킹 중입니다...",
+  [JobDetailStatus.OPPONENT_FOUND]: "대결 상대를 찾았습니다!",
+  [JobDetailStatus.PREPARING_STADIUM]: "경기장을 준비하고 있습니다...",
+  [JobDetailStatus.PLAYERS_ENTERING]: "선수들이 입장하고 있습니다...",
+  [JobDetailStatus.SIMULATING]: "AI가 시뮬레이션 중입니다...",
+  [JobDetailStatus.SAVING_RESULT]: "결과를 저장하는 중입니다...",
+  [JobDetailStatus.COMPLETED]: "경기가 완료되었습니다.",
+  [JobDetailStatus.FAILED]: "오류가 발생했습니다.",
 };
 
 // 매치 상태에 따른 진행률 맵
-const PROGRESS_BY_STATUS = {
-  [MatchStatus.MATCHMAKING]: 10,
-  [MatchStatus.OPPONENT_FOUND]: 25,
-  [MatchStatus.PREPARING_STADIUM]: 40,
-  [MatchStatus.PLAYERS_ENTERING]: 55,
-  [MatchStatus.MATCH_STARTED]: 70,
-  [MatchStatus.SIMULATION_ACTIVE]: 85,
-  [MatchStatus.MATCH_ENDED]: 100,
+const PROGRESS_BY_STATUS: ProgressMapType = {
+  // 매치 상태
+  [MatchStatus.CREATED]: 10,
+  [MatchStatus.STARTED]: 25,
+  [MatchStatus.IN_PROGRESS]: 70,
+  [MatchStatus.ENDED]: 100,
+
+  // 작업 상세 상태
+  [JobDetailStatus.MATCHMAKING]: 10,
+  [JobDetailStatus.OPPONENT_FOUND]: 25,
+  [JobDetailStatus.PREPARING_STADIUM]: 40,
+  [JobDetailStatus.PLAYERS_ENTERING]: 55,
+  [JobDetailStatus.SIMULATING]: 70,
+  [JobDetailStatus.SAVING_RESULT]: 85,
+  [JobDetailStatus.COMPLETED]: 100,
+  [JobDetailStatus.FAILED]: 100,
 };
 
 // 소켓 이벤트 타입 정의
@@ -103,6 +129,8 @@ interface MatchStatusUpdate {
 interface JobStatusData {
   jobId: string;
   status: "pending" | "processing" | "completed" | "failed";
+  detailStatus?: JobDetailStatus; // 상세 상태 추가
+  progressMessage?: string; // 진행 상태 메시지 추가
   matchId?: string;
   error?: string;
 }
@@ -116,9 +144,9 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
 
   // 상태 관리
   const [progress, setProgress] = useState<number>(0);
-  const [status, setStatus] = useState<MatchStatus>(MatchStatus.MATCHMAKING);
+  const [status, setStatus] = useState<MatchStatus>(MatchStatus.CREATED);
   const [message, setMessage] = useState<string>(
-    STATUS_MESSAGES[MatchStatus.MATCHMAKING]
+    STATUS_MESSAGES[JobDetailStatus.MATCHMAKING] || "매치메이킹 중입니다..."
   );
   const [matchId, setMatchId] = useState<string | undefined>(initialMatchId);
   const [logs, setLogs] = useState<MatchLog[]>([]);
@@ -164,17 +192,17 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
   // 초기 진행률 설정
   const initialProgress = useMemo(() => {
     if (initialMatchId)
-      return PROGRESS_BY_STATUS[MatchStatus.PREPARING_STADIUM];
-    if (jobId) return PROGRESS_BY_STATUS[MatchStatus.MATCHMAKING];
+      return PROGRESS_BY_STATUS[JobDetailStatus.PREPARING_STADIUM];
+    if (jobId) return PROGRESS_BY_STATUS[JobDetailStatus.MATCHMAKING];
     return 0;
   }, [initialMatchId, jobId]);
 
   // 점수 표시 여부 결정
   const showScoreDisplay = useMemo(() => {
     return [
-      MatchStatus.MATCH_STARTED,
-      MatchStatus.SIMULATION_ACTIVE,
-      MatchStatus.MATCH_ENDED,
+      MatchStatus.STARTED,
+      MatchStatus.IN_PROGRESS,
+      MatchStatus.ENDED,
     ].includes(status);
   }, [status]);
 
@@ -239,10 +267,12 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
 
     // 매치 구독
     if (matchId) {
-      log("매치 구독", { matchId });
+      const roomName = `match:${matchId}`;
+      log("매치 구독", { matchId, roomName });
       socketState.current.joinRequestTime = Date.now();
-      sock.emit(SOCKET_ACTIONS.JOIN_MATCH, { matchId });
-      socketState.current.subscriptionIds.add(`match:${matchId}`);
+
+      sock.emit(SOCKET_ACTIONS.JOIN_MATCH, { matchId, roomName });
+      socketState.current.subscriptionIds.add(roomName);
 
       // 5초 후 구독 성공 여부 확인
       setTimeout(() => {
@@ -303,7 +333,7 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
       }
 
       // 매치 종료 처리
-      if (data.status === MatchStatus.MATCH_ENDED) {
+      if (data.status === MatchStatus.ENDED) {
         handleMatchComplete();
       }
     },
@@ -427,9 +457,9 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
 
       socketState.current.lastEventReceived = Date.now();
       log("매치 종료", { matchId });
-      setStatus(MatchStatus.MATCH_ENDED);
-      setMessage(STATUS_MESSAGES[MatchStatus.MATCH_ENDED]);
-      updateProgressByStatus(MatchStatus.MATCH_ENDED);
+      setStatus(MatchStatus.ENDED);
+      setMessage(STATUS_MESSAGES[MatchStatus.ENDED]);
+      updateProgressByStatus(MatchStatus.ENDED);
       handleMatchComplete();
     },
     [matchId, log, updateProgressByStatus, handleMatchComplete]
@@ -460,7 +490,7 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
     [matchId, socket, log]
   );
 
-  // 작업 상태 업데이트 핸들러
+  // 작업 상태 업데이트 핸들러 수정
   const handleJobStatus = useCallback(
     (data: JobStatusData) => {
       if (data.jobId !== jobId) return;
@@ -473,9 +503,29 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
       } else if (data.status === "failed" && data.error) {
         log("작업 실패", { error: data.error });
         setMessage(`오류 발생: ${data.error}`);
+      } else if (data.detailStatus) {
+        // 상세 상태가 있으면 해당 상태에 맞게 메시지와 진행률 업데이트
+        log("작업 상세 상태 업데이트", {
+          status: data.status,
+          detailStatus: data.detailStatus,
+          message: data.progressMessage,
+        });
+
+        // 메시지 업데이트
+        if (data.progressMessage) {
+          setMessage(data.progressMessage);
+        } else {
+          setMessage(STATUS_MESSAGES[data.detailStatus] || "처리 중...");
+        }
+
+        // 진행률 업데이트
+        const newProgress = PROGRESS_BY_STATUS[data.detailStatus];
+        if (newProgress && newProgress !== progress) {
+          setProgress(newProgress);
+        }
       }
     },
-    [jobId, log]
+    [jobId, progress, log]
   );
 
   // 인증 성공 핸들러
@@ -523,9 +573,9 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
       // 매치가 이미 진행 중이거나 완료된 경우 세부 정보 로드
       if (
         [
-          MatchStatus.MATCH_STARTED,
-          MatchStatus.SIMULATION_ACTIVE,
-          MatchStatus.MATCH_ENDED,
+          MatchStatus.STARTED,
+          MatchStatus.IN_PROGRESS,
+          MatchStatus.ENDED,
         ].includes(statusResponse.status)
       ) {
         try {
@@ -538,7 +588,7 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
             setHomeScore(matchDetails.result.homeScore);
             setAwayScore(matchDetails.result.awayScore);
 
-            if (statusResponse.status === MatchStatus.MATCH_ENDED) {
+            if (statusResponse.status === MatchStatus.ENDED) {
               handleMatchComplete();
             }
           }
@@ -656,7 +706,7 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
           after: isConnected,
         });
 
-        socketState.current.isConnected = isConnected;
+        socketState.current.isConnected = Boolean(isConnected);
 
         // 연결 끊김 → 연결됨으로 변경된 경우 재구독
         if (
@@ -719,7 +769,7 @@ const AIStyleLoader: React.FC<AIStyleLoaderProps> = ({
     if (initialMatchId && initialMatchId !== matchId) {
       log("초기 매치 ID 변경 감지", { newId: initialMatchId, prevId: matchId });
       setMatchId(initialMatchId);
-      setProgress(PROGRESS_BY_STATUS[MatchStatus.PREPARING_STADIUM]);
+      setProgress(PROGRESS_BY_STATUS[JobDetailStatus.PREPARING_STADIUM]);
 
       // 새 매치 ID로 재구독 필요
       socketState.current.isSubscribed = false;

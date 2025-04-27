@@ -2,6 +2,7 @@ import { authFetch } from "./client";
 import {
   MatchData,
   MatchEvent,
+  MatchJobStatusResponse,
   MatchStatistics,
   MatchStatus,
 } from "../types/global.d";
@@ -56,18 +57,7 @@ export const createGameMatch = async (
  */
 export const getMatchJobStatus = async (
   jobId: string
-): Promise<{
-  jobId: string;
-  status: string;
-  createdAt: string;
-  matchId?: string;
-  error?: string;
-  result?: {
-    homeScore: number;
-    awayScore: number;
-    winner: "home" | "away" | "draw";
-  };
-}> => {
+): Promise<MatchJobStatusResponse> => {
   logAPI("매치 작업 상태 조회", { jobId });
   try {
     const response = await authFetch(`${API_BASE}/jobs/${jobId}`);

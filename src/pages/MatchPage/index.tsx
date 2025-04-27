@@ -11,8 +11,10 @@ import { useMatch } from "../../context/MatchContext";
 import { useAuth } from "../../context/AuthContext";
 import { MatchData, MatchStatus } from "../../types/global.d";
 import { getMatchStatus } from "../../api/match";
-import { useSocket } from "../../hooks/useSocket"; // 소켓 연결 다시 활성화
+import { useSocket } from "../../hooks/useSocket";
 import { shareMatch } from "../../api/match";
+// JobStatusTracker 컴포넌트 추가
+import JobStatusTracker from "../../components/JobStatusTracker";
 
 import {
   LoadingIndicator,
@@ -137,7 +139,7 @@ const MatchPage: React.FC = () => {
         logMatchPage("웹소켓으로 매치 상태 업데이트 수신", data);
 
         // 매치가 종료되면 완료 처리
-        if (data.status === MatchStatus.MATCH_ENDED) {
+        if (data.status === MatchStatus.ENDED) {
           logMatchPage("웹소켓으로 매치 종료 감지", { matchId });
           loadMatchDetails();
           stopPolling();
@@ -165,7 +167,7 @@ const MatchPage: React.FC = () => {
     // 올바른 이벤트 이름으로 리스너 등록
     socket.on("match:statusUpdate", handleStatusChange);
     socket.on("match:event", handleMatchEvent);
-    socket.on("match:end", handleMatchEnd);
+    socket.on("match/end", handleMatchEnd);
 
     // 매치 구독 요청
     socket.emit("match:join", { matchId });
@@ -203,15 +205,15 @@ const MatchPage: React.FC = () => {
           });
 
           // 매치가 종료되면 결과 페이지로 전환
-          if (statusResponse.status === MatchStatus.MATCH_ENDED) {
+          if (statusResponse.status === MatchStatus.ENDED) {
             logMatchPage("매치 종료 감지", { matchId });
             loadMatchDetails();
             stopPolling();
           }
           // 각 상태에 따라 적절히 처리
           else if (
-            statusResponse.status === MatchStatus.SIMULATION_ACTIVE ||
-            statusResponse.status === MatchStatus.MATCH_STARTED
+            statusResponse.status === MatchStatus.IN_PROGRESS ||
+            statusResponse.status === MatchStatus.STARTED
           ) {
             logMatchPage("매치 진행 중", {
               matchId,
@@ -341,12 +343,16 @@ const MatchPage: React.FC = () => {
       hasError: !!error,
     });
 
-    // jobId가 있으면 AIStyleLoader 통해 매치 진행 표시
+    // jobId가 있으면 JobStatusTracker를 통해 매치 작업 상태 표시
     if (jobId) {
       return (
-        <Suspense fallback={<LoadingIndicator>로딩 중...</LoadingIndicator>}>
-          <AIStyleLoader jobId={jobId} onMatchComplete={handleMatchComplete} />
-        </Suspense>
+        <MatchContainer>
+          <Title>매치 생성 중</Title>
+          <JobStatusTracker
+            jobId={jobId}
+            onMatchComplete={handleMatchComplete}
+          />
+        </MatchContainer>
       );
     }
 
