@@ -73,18 +73,25 @@ export const unsubscribeFromMatch = (socket: Socket, matchId: string): void => {
   socket.emit("match:leave", { matchId });
 };
 
-// 매치 작업 구독 함수
+/**
+ * 매치 작업 구독 함수
+ * 현재 서버측에서 이 기능은 백지화되어 있습니다.
+ * 호출 시 '작업 상태 추적 기능이 구현되지 않았습니다' 메시지를 받게 됩니다.
+ */
 export const subscribeToMatchJob = (socket: Socket, jobId: string): void => {
-  logSocket("매치 작업 구독", { jobId });
+  logSocket("매치 작업 구독 (백지화된 기능)", { jobId });
   socket.emit("match:subscribeJob", { jobId });
 };
 
-// 매치 작업 구독 취소 함수
+/**
+ * 매치 작업 구독 취소 함수
+ * 현재 서버측에서 이 기능은 백지화되어 있습니다.
+ */
 export const unsubscribeFromMatchJob = (
   socket: Socket,
   jobId: string
 ): void => {
-  logSocket("매치 작업 구독 취소", { jobId });
+  logSocket("매치 작업 구독 취소 (백지화된 기능)", { jobId });
   socket.emit("match:unsubscribeJob", { jobId });
 };
 

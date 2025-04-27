@@ -12,7 +12,7 @@ import { useAuth } from "../../context/AuthContext";
 import { MatchData, MatchStatus } from "../../types/global.d";
 import { getMatchStatus } from "../../api/match";
 import { useSocket } from "../../hooks/useSocket";
-import { shareMatch } from "../../api/match";
+// shareMatch 함수 import 제거
 // JobStatusTracker 컴포넌트 추가
 import JobStatusTracker from "../../components/JobStatusTracker";
 
@@ -166,7 +166,7 @@ const MatchPage: React.FC = () => {
 
     // 올바른 이벤트 이름으로 리스너 등록
     socket.on("match:statusUpdate", handleStatusChange);
-    socket.on("match:event", handleMatchEvent);
+    socket.on("match/event", handleMatchEvent);
     socket.on("match/end", handleMatchEnd);
 
     // 매치 구독 요청
@@ -252,33 +252,26 @@ const MatchPage: React.FC = () => {
     socket,
   ]);
 
-  // 매치 공유 기능
+  // 매치 공유 기능 - 백지화
   const handleShareMatch = useCallback(async () => {
     if (!match) return;
 
     try {
       setSharingStatus({ loading: true });
-      logMatchPage("매치 결과 공유 요청", { matchId: match.id });
+      logMatchPage("매치 결과 공유 요청 (백지화된 기능)", {
+        matchId: match.id,
+      });
 
-      const response = await shareMatch(match.id);
-      logMatchPage("매치 결과 공유 성공", { imageUrl: response.imageUrl });
-
-      // 공유 URL 상태 저장
-      setSharingStatus({ loading: false, url: response.imageUrl });
-
-      // 클립보드에 URL 복사
-      await navigator.clipboard.writeText(response.imageUrl);
-
-      // 간단한 알림 메시지
-      alert("매치 결과 이미지 URL이 클립보드에 복사되었습니다.");
+      // 백지화된 기능임을 알리는 메시지
+      setTimeout(() => {
+        setSharingStatus({ loading: false });
+        alert("매치 결과 공유 기능은 현재 구현되지 않았습니다.");
+      }, 500);
     } catch (err) {
-      const errorMsg =
-        err instanceof Error
-          ? err.message
-          : "매치 공유 중 오류가 발생했습니다.";
-      logMatchPage("매치 공유 실패", { error: errorMsg });
+      const errorMsg = "매치 공유 기능은 현재 구현되지 않았습니다.";
+      logMatchPage("매치 공유 시도 (백지화된 기능)", { error: errorMsg });
       setSharingStatus({ loading: false, error: errorMsg });
-      alert(`매치 공유 실패: ${errorMsg}`);
+      alert(errorMsg);
     }
   }, [match]);
 
@@ -348,10 +341,7 @@ const MatchPage: React.FC = () => {
       return (
         <MatchContainer>
           <Title>매치 생성 중</Title>
-          <JobStatusTracker
-            jobId={jobId}
-            onMatchComplete={handleMatchComplete}
-          />
+          <JobStatusTracker jobId={jobId} onComplete={handleMatchComplete} />
         </MatchContainer>
       );
     }

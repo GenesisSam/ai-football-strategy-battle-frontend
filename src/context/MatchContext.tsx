@@ -62,33 +62,31 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     }
 
     if (socket) {
-      // 작업 상태 업데이트 이벤트 리스너
+      // 작업 상태 업데이트 이벤트 리스너 (백지화됨)
       socket.on("match:jobUpdate", (data: { jobId: string } & JobStatus) => {
         const { jobId, ...status } = data;
-        logMatch("작업 상태 업데이트", { jobId, status });
+        logMatch("작업 상태 업데이트 (백지화된 기능)", { jobId, status });
 
+        // 기본적인 상태 업데이트만 제공
         setJobStatus((prevState) => ({
           ...prevState,
-          [jobId]: status,
+          [jobId]: {
+            status: "processing",
+            progress: 0.5, // 항상 50%로 고정
+          },
         }));
-
-        // 작업이 완료되면 추가 작업 수행 가능
-        if (status.status === "completed" && status.result?.matchId) {
-          logMatch("작업 완료 - 매치 생성됨", {
-            matchId: status.result.matchId,
-          });
-        }
       });
 
-      // 작업 에러 이벤트 리스너
+      // 작업 에러 이벤트 리스너 (백지화됨)
       socket.on("match:jobError", (data: { jobId: string; error: string }) => {
-        logMatch("작업 에러", data);
+        logMatch("작업 에러 (백지화된 기능)", data);
         setJobStatus((prevState) => ({
           ...prevState,
           [data.jobId]: {
             ...prevState[data.jobId],
             status: "failed",
-            error: data.error,
+            error:
+              "작업 처리 중 오류가 발생했습니다. 현재 작업 추적 기능은 완전히 구현되지 않았습니다.",
           },
         }));
       });
@@ -106,19 +104,23 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     setError(null);
   }, []);
 
-  // 특정 작업 구독
+  // 특정 작업 구독 (백지화됨)
   const subscribeToJob = useCallback(
     (jobId: string) => {
-      logMatch("작업 구독", { jobId });
+      logMatch("작업 구독 (백지화된 기능)", { jobId });
 
       if (socket && isConnected) {
         setCurrentJobId(jobId);
+        // 서버에 구독 요청은 유지하되, 백엔드에서는 제대로 처리되지 않음
         subscribeToMatchJob(socket, jobId);
 
-        // 초기 상태 설정
+        // 백지화된 기능이므로 임의의 처리 중 상태로 설정
         setJobStatus((prevState) => ({
           ...prevState,
-          [jobId]: prevState[jobId] || { status: "pending" },
+          [jobId]: {
+            status: "processing",
+            progress: 0.5, // 항상 50%로 고정
+          },
         }));
       } else {
         logMatch("작업 구독 실패 - 소켓 연결 없음", { jobId });
@@ -127,14 +129,14 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     [socket, isConnected]
   );
 
-  // 작업 구독 취소
+  // 작업 구독 취소 (백지화됨)
   const unsubscribeFromJob = useCallback(
     (jobId?: string) => {
       const idToUnsubscribe = jobId || currentJobId;
 
       if (!idToUnsubscribe) return;
 
-      logMatch("작업 구독 취소", { jobId: idToUnsubscribe });
+      logMatch("작업 구독 취소 (백지화된 기능)", { jobId: idToUnsubscribe });
 
       if (socket && isConnected) {
         unsubscribeFromMatchJob(socket, idToUnsubscribe);
@@ -173,20 +175,33 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     []
   );
 
-  // 게임 대전 시작 (비동기)
+  // 게임 대전 시작 (백지화됨)
   const startGameMatch = useCallback(
     async (squadId: string): Promise<string | null> => {
-      logMatch("게임 매치 시작", { squadId });
+      logMatch("게임 매치 시작 (백지화된 기능)", { squadId });
       try {
         setIsLoading(true);
         setError(null);
 
+        // API 호출은 유지하되, 결과는 백엔드에서 제대로 처리되지 않음
         const { jobId } = await matchApi.createGameMatch(squadId);
-        logMatch("게임 매치 작업 생성 완료", { jobId });
+        logMatch("게임 매치 작업 생성 완료 (백지화된 기능)", { jobId });
 
-        // 작업 생성 후 자동으로 구독
-        if (jobId && socket && isConnected) {
-          subscribeToJob(jobId);
+        if (jobId) {
+          // 임의의 작업 상태 설정
+          setJobStatus({
+            [jobId]: {
+              status: "processing",
+              progress: 0.5, // 항상 50%로 고정
+            },
+          });
+
+          setCurrentJobId(jobId);
+
+          // 작업 생성 후 자동으로 구독 (실제로는 제대로 동작하지 않음)
+          if (socket && isConnected) {
+            subscribeToJob(jobId);
+          }
         }
 
         return jobId;
@@ -194,8 +209,10 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
         const errorMessage =
           err instanceof Error
             ? err.message
-            : "게임 매치를 시작하는 중 오류가 발생했습니다.";
-        logMatch("게임 매치 시작 오류", { error: errorMessage });
+            : "게임 매치를 시작하는 중 오류가 발생했습니다. (현재 이 기능은 완전히 구현되지 않았습니다)";
+        logMatch("게임 매치 시작 오류 (백지화된 기능)", {
+          error: errorMessage,
+        });
         setError(errorMessage);
         return null;
       } finally {

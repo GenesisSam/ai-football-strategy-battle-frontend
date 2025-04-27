@@ -34,6 +34,7 @@ export const createQuickMatch = async (squadId: string): Promise<MatchData> => {
 
 /**
  * 게임 대전 매치 생성 (비동기)
+ * 현재 서버측에서 이 기능은 백지화되어 있습니다
  */
 export const createGameMatch = async (
   squadId: string
@@ -54,6 +55,7 @@ export const createGameMatch = async (
 
 /**
  * 매치 작업 상태 조회
+ * 현재 서버측에서 이 기능은 백지화되어 있습니다
  */
 export const getMatchJobStatus = async (
   jobId: string
@@ -179,25 +181,6 @@ export const getMatchStatus = async (
     };
   } catch (error) {
     logAPI("매치 상태 조회 실패", { matchId, error });
-    throw error;
-  }
-};
-
-/**
- * 매치 결과 이미지 생성 및 공유
- */
-export const shareMatch = async (
-  matchId: string
-): Promise<{ imageUrl: string }> => {
-  logAPI("매치 결과 공유 요청", { matchId });
-  try {
-    const response = await authFetch(`${API_BASE}/${matchId}/share`, {
-      method: "POST",
-    });
-    logAPI("매치 결과 공유 성공", { matchId, imageUrl: response.imageUrl });
-    return response;
-  } catch (error) {
-    logAPI("매치 결과 공유 실패", error);
     throw error;
   }
 };
