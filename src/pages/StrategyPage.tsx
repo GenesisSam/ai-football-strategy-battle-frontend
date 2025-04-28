@@ -168,22 +168,12 @@ const StrategyPage: React.FC = () => {
           setSquadName(squad.name);
           setFormation(squad.formation);
 
-          // 포메이션의 포지션 정보 가져오기
-          const formationPositions =
-            formations[squad.formation]?.positions || [];
-
           // 선수들을 포지션 인덱스와 함께 저장
           const playersWithPositions: PositionPlayer[] = squad.players.map(
             (player, index) => {
-              // 포메이션 포지션과 매칭할 인덱스 찾기
-              // 서버에서 받은 position과 일치하는 포메이션 포지션 찾기
-              const positionIndex = formationPositions.findIndex(
-                (pos) => pos.position === player.position
-              );
-
               return {
                 ...player,
-                positionIndex: positionIndex !== -1 ? positionIndex : index,
+                positionIndex: index,
               };
             }
           );

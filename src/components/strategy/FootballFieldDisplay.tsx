@@ -193,6 +193,7 @@ const FootballFieldDisplay: React.FC<FootballFieldDisplayProps> = React.memo(
                 top={pos.top}
                 left={pos.left}
                 selected={Boolean(playerForPosition)}
+                title={playerForPosition ? playerForPosition.name : undefined}
                 onClick={() => onPositionClick(index)}
               >
                 {playerForPosition
