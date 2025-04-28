@@ -7,7 +7,6 @@ import React, {
 } from "react";
 
 import {
-  createQuickMatch,
   createGameMatch,
   getMatchById,
   cancelMatchRequest,
@@ -24,7 +23,6 @@ interface MatchContextType {
   isPolling: boolean;
   error: string | null;
   getMatchDetails: (id: string) => Promise<MatchData | null>;
-  startQuickMatch: (squadId: string) => Promise<string>;
   startGameMatch: (squadId: string) => Promise<string>;
   cancelMatch: (matchId: string) => Promise<boolean>;
   stopPolling: () => void;
@@ -39,7 +37,6 @@ const initialMatchContext: MatchContextType = {
   isPolling: false,
   error: null,
   getMatchDetails: async () => null,
-  startQuickMatch: async () => "",
   startGameMatch: async () => "",
   cancelMatch: async () => false,
   stopPolling: () => {},
@@ -92,35 +89,6 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
         logMatchContext("매치 상세 조회 실패", err);
         setError(`매치 상세 조회 실패: ${err.message || "알 수 없는 오류"}`);
         return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
-
-  // 빠른 대전 시작
-  const startQuickMatch = useCallback(
-    async (squadId: string): Promise<string> => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        logMatchContext("빠른 대전 시작", { squadId });
-        const response = await createQuickMatch(squadId);
-
-        // id가 있거나 _id가 있는 경우 모두 처리
-        const matchId = response?.id || response?._id;
-
-        if (matchId) {
-          logMatchContext("빠른 대전 생성 성공", { matchId });
-          return matchId;
-        }
-
-        throw new Error("매치 ID를 받지 못했습니다");
-      } catch (err: any) {
-        logMatchContext("빠른 대전 시작 실패", err);
-        setError(`빠른 대전 시작 실패: ${err.message || "알 수 없는 오류"}`);
-        throw err;
       } finally {
         setIsLoading(false);
       }
@@ -214,7 +182,6 @@ export const MatchProvider: React.FC<MatchProviderProps> = ({ children }) => {
     isPolling,
     error,
     getMatchDetails,
-    startQuickMatch,
     startGameMatch,
     cancelMatch,
     stopPolling,

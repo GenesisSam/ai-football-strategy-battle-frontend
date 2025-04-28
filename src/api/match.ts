@@ -14,31 +14,6 @@ const logAPI = (action: string, data?: any) => {
 };
 
 /**
- * 빠른 대전 매치 생성
- */
-export const createQuickMatch = async (squadId: string): Promise<MatchData> => {
-  logAPI("빠른 대전 매치 생성 요청", { squadId });
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.MATCHES.QUICK}`, {
-      method: "POST",
-      body: JSON.stringify({ squadId }),
-    });
-    logAPI("빠른 대전 매치 생성 성공", response);
-
-    // 응답에 id가 없지만 _id가 있는 경우 id 속성 추가
-    if (!response.id && response._id) {
-      response.id = response._id;
-      logAPI("매치 ID 자동 변환", { _id: response._id, id: response.id });
-    }
-
-    return response;
-  } catch (error) {
-    logAPI("빠른 대전 매치 생성 실패", error);
-    throw error;
-  }
-};
-
-/**
  * 게임 대전 매치 생성
  */
 export const createGameMatch = async (squadId: string): Promise<MatchData> => {

@@ -8,8 +8,6 @@
 export interface MatchEndpointsType {
   /** 기본 매치 엔드포인트 */
   BASE: string;
-  /** 빠른 매치 생성 엔드포인트 */
-  QUICK: string;
   /** 게임 매치 생성 엔드포인트 */
   GAME: string;
   /** 매치 작업 엔드포인트 */
@@ -112,7 +110,6 @@ export const API_ENDPOINTS: ApiEndpointsType = {
   // 매치 관련 엔드포인트
   MATCHES: {
     BASE: "/matches",
-    QUICK: "/matches/quick",
     GAME: "/matches/game",
     JOBS: "/matches/jobs",
     STATUS: (matchId: string) => `/matches/${matchId}/status`,
